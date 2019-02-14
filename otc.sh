@@ -1619,6 +1619,12 @@ dehHelp()
 	echo "otc deh listtypes <az>  # List avail Dedicated Host types"
 }
 
+workspaceHelp()
+{
+	echo "--- Workspace ---"
+	echo "otc workspace list      # query workspace details"
+}
+
 mdsHelp()
 {
 	echo "--- Metadata helper ---"
@@ -1689,6 +1695,8 @@ printHelp()
 	otcnew3Help
 	echo
 	dehHelp
+	echo
+	workspaceHelp
 	echo
 	customHelp
 	echo
@@ -6543,6 +6551,16 @@ getMeta()
 	return $RC
 }
 
+listWorkspaces()
+{
+	URL="$BASEURL/v1.0/$OS_PROJECT_ID/workspaces"
+
+	curlgetauth $TOKEN "$URL" | jq -r '.ad_domains.domain_type + "   " + .ad_domains.domain_name + "   " + .status + "   " + .access_mode + "   " + .internet_access_address' | sed -r '/^\s*$/d'
+
+	return ${PIPESTATUS[0]}
+}
+
+
 ##########################################################################################
 
 # Package dependency #####################################################################
@@ -6928,6 +6946,7 @@ if [ "$MAINCOM" = "product" ]; then MAINCOM="products"; fi
 if [ "$MAINCOM" = "marketplace" ]; then MAINCOM="products"; fi
 if [ "$MAINCOM" = "natgw" ]; then MAINCOM="nat"; fi
 if [ "$MAINCOM" = "as" ]; then MAINCOM="asgroup"; fi
+if [ "$MAINCOM" = "workspaces" ]; then MAINCOM="workspace"; fi
 
 # Some IAM functions need special handling
 if [ "$MAINCOM" = "iam" -a "$SUBCOM" = "catalog" ]; then OUTPUT_CAT=1; fi
@@ -7873,6 +7892,11 @@ elif [ "$MAINCOM" == "deh" -a "$SUBCOM" == "create" ]; then
 	createDEH "$@"
 elif [ "$MAINCOM" == "deh" -a "$SUBCOM" == "delete" ]; then
 	deleteDEH "$1"
+
+elif [ "$MAINCOM" == "workspace" -a "$SUBCOM" == "help" ]; then
+	workspaceHelp
+elif [ "$MAINCOM" == "workspace" -a "$SUBCOM" == "list" ]; then
+	listWorkspaces
 
 elif [ "$MAINCOM" == "mds" -a "$SUBCOM" == "help" ]; then
 	mdsHelp
