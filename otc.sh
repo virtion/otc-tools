@@ -1625,6 +1625,12 @@ workspaceHelp()
 	echo "otc workspace list      # query workspace details"
 }
 
+desktopHelp()
+{
+	echo "--- Workspace Desktops ---"
+	echo "otc desktop list        # query list of workspace desktops"
+}
+
 mdsHelp()
 {
 	echo "--- Metadata helper ---"
@@ -1697,6 +1703,8 @@ printHelp()
 	dehHelp
 	echo
 	workspaceHelp
+	echo
+	desktopHelp
 	echo
 	customHelp
 	echo
@@ -6560,6 +6568,15 @@ listWorkspaces()
 	return ${PIPESTATUS[0]}
 }
 
+listDesktops()
+{
+	URL="$BASEURL/v1.0/$OS_PROJECT_ID/desktops"
+
+	curlgetauth $TOKEN "$URL" | jq -r '.desktops[] | .desktop_id + "   " + .computer_name + "   " + .ip_address + "   " + .user_name + "   " + .user_group + "   " + .desktop_type' | sed -r '/^\s*$/d'
+
+	return ${PIPESTATUS[0]}
+}
+
 
 ##########################################################################################
 
@@ -6947,6 +6964,7 @@ if [ "$MAINCOM" = "marketplace" ]; then MAINCOM="products"; fi
 if [ "$MAINCOM" = "natgw" ]; then MAINCOM="nat"; fi
 if [ "$MAINCOM" = "as" ]; then MAINCOM="asgroup"; fi
 if [ "$MAINCOM" = "workspaces" ]; then MAINCOM="workspace"; fi
+if [ "$MAINCOM" = "desktops" ]; then MAINCOM="desktop"; fi
 
 # Some IAM functions need special handling
 if [ "$MAINCOM" = "iam" -a "$SUBCOM" = "catalog" ]; then OUTPUT_CAT=1; fi
@@ -7897,6 +7915,11 @@ elif [ "$MAINCOM" == "workspace" -a "$SUBCOM" == "help" ]; then
 	workspaceHelp
 elif [ "$MAINCOM" == "workspace" -a "$SUBCOM" == "list" ]; then
 	listWorkspaces
+
+elif [ "$MAINCOM" == "desktop" -a "$SUBCOM" == "help" ]; then
+	desktopHelp
+elif [ "$MAINCOM" == "desktop" -a "$SUBCOM" == "list" ]; then
+	listDesktops
 
 elif [ "$MAINCOM" == "mds" -a "$SUBCOM" == "help" ]; then
 	mdsHelp
