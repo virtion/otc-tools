@@ -4185,20 +4185,36 @@ getECSlog()
 	return $RC
 }
 
+getJobList()
+{
+	if test -z "$1"; then echo
+		echo "ERROR: Need to pass job ID to getJobList" 1>&2
+		exit 1
+	fi
+
+	if test -z "$2"; then echo
+		echo "ERROR: Need to pass job URL to getJobList" 1>&2
+		exit 1
+	fi
+	#curlgetauth $TOKEN "$2/$1"
+
+	export JOBSTATUSJSON
+	JOBSTATUSJSON=`curlgetauth "$TOKEN" "$2/$1"`
+	RC=$?
+	#echo $JOBSTATUSJSON
+	export JOBSTATUS=`echo $JOBSTATUSJSON| jq '.status'|head -n 1 |cut -d':' -f 2 | tr -d '"'| tr -d ' '`
+
+	return $RC
+}
+
 # ECS helpers
 getECSJOBList()
 {
-	if test -z "$1"; then echo
-		echo "ERROR: Need to pass job ID to getECSJOBList" 1>&2
-		exit 1
-	fi
-	#curlgetauth $TOKEN "$AUTH_URL_ECS_JOB/$1"
-
-	export ECSJOBSTATUSJSON
-	ECSJOBSTATUSJSON=`curlgetauth "$TOKEN" "$AUTH_URL_ECS_JOB/$1"`
+	getJobList "$1" "$AUTH_URL_ECS_JOB"
 	RC=$?
-	#echo $ECSJOBSTATUSJSON
-	export ECSJOBSTATUS=`echo $ECSJOBSTATUSJSON| jq '.status'|head -n 1 |cut -d':' -f 2 | tr -d '"'| tr -d ' '`
+
+	export ECSJOBSTATUSJSON=$JOBSTATUSJSON
+	export ECSJOBSTATUS=$JOBSTATUS
 
 	return $RC
 }
@@ -5371,7 +5387,8 @@ WaitForSubTask()
 # $2 = PollFreq (s), default 2s
 # $3 = MaxWait (in multiples of 2xPollFreq), default 2hrs
 # $4 = Field to output (optional)
-WaitForTask()
+# $5 = URL to query for task status
+WaitForTaskGeneric()
 {
 	local SEC=${2:-2}
 	# Timeout after 2hrs
@@ -5379,37 +5396,48 @@ WaitForTask()
 	local TOUT=$((2*${3:-$DEFTOUT}))
 	unset FIELD
 	if [ "$WAIT_FOR_JOB" == "true" ]; then
-		echo "Waiting for Job:   $AUTH_URL_ECS_JOB/$1" 1>&2
-		getECSJOBList $1
+		echo "Waiting for Job:   $5/$1" 1>&2
+		getJobList $1 $5
 
-		local RESP="$ECSJOBSTATUSJSON"
-		if test -n "$4"; then FIELD=$(echo $ECSJOBSTATUSJSON| jq "$4" 2>/dev/null | tr -d '"'); fi
+		local RESP="$JOBSTATUSJSON"
+		if test -n "$4"; then FIELD=$(echo $JOBSTATUSJSON| jq "$4" 2>/dev/null | tr -d '"'); fi
 		echo "#$RESP" 1>&2
 		declare -i ctr=0
-		while [ $ctr -le $TOUT ] && [ "$ECSJOBSTATUS" == "RUNNING" -o "$ECSJOBSTATUS" == "INIT" ]; do
+		while [ $ctr -le $TOUT ] && [ "$JOBSTATUS" == "RUNNING" -o "$JOBSTATUS" == "INIT" ]; do
 			sleep $SEC
-			getECSJOBList $1
-			if test -n "$4"; then FIELD=$(echo $ECSJOBSTATUSJSON| jq "$4" 2>/dev/null | tr -d '"'); fi
-			if [ "$RESP" != "$ECSJOBSTATUSJSON" ]; then
-				RESP="$ECSJOBSTATUSJSON"
+			getJobList $1 $5
+			if test -n "$4"; then FIELD=$(echo $JOBSTATUSJSON| jq "$4" 2>/dev/null | tr -d '"'); fi
+			if [ "$RESP" != "$JOBSTATUSJSON" ]; then
+				RESP="$JOBSTATUSJSON"
 				echo -e "\n#$RESP" 1>&2
 			else
 				echo -n "." 1>&2
 			fi
 			let ctr+=1
-			if test "$(echo $ECSJOBSTATUSJSON | jq '.status' | tr -d '"')" == "FAIL"; then
-				#echo "ERROR: Job $ECSSUBTASKID failed" 1>&2
-				#echo "$ECSJOBSTATUSJSON" | jq '.' 1>&2
+			if test "$(echo $JOBSTATUSJSON | jq '.status' | tr -d '"')" == "FAIL"; then
+				#echo "ERROR: Job $SUBTASKID failed" 1>&2
+				#echo "$JOBSTATUSJSON" | jq '.' 1>&2
 				return 8
 			fi
 		done
 		if [ $ctr -gt $TOUT ]; then echo "WARN: Task $1 timed out after 2hrs" 1>&2;
 		elif [ -n "$FIELD" -a "$FIELD" != "null" ]; then echo "$FIELD"; fi
 	else
-		getECSJOBList $1
-		echo "#$ECSJOBSTATUSJSON" 1>&2
+		getJobList $1 $5
+		echo "#$JOBSTATUSJSON" 1>&2
 		echo "#Note: Not waiting for completion, use otc task show $1 to monitor and otc task wait to wait)"
 	fi
+}
+
+# Wait for task to completely finish (if WAIT_FOR_JOB==true),
+# optionally output field ($4), otherwise don't wait
+# $1 = TASKID
+# $2 = PollFreq (s), default 2s
+# $3 = MaxWait (in multiples of 2xPollFreq), default 2hrs
+# $4 = Field to output (optional)
+WaitForTask()
+{
+	WaitForTaskGeneric "$1" "$2" "$3" "$4" "$AUTH_URL_ECS_JOB"
 }
 
 # Wait for full completion if WAIT_FOR_JOB is "true", not at all if set to something else,
