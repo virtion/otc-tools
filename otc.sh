@@ -5410,6 +5410,7 @@ WaitForSubTask()
 # $3 = MaxWait (in multiples of 2xPollFreq), default 2hrs
 # $4 = Field to output (optional)
 # $5 = URL to query for task status
+# $6 = task command name
 WaitForTaskGeneric()
 {
 	local SEC=${2:-2}
@@ -5447,7 +5448,7 @@ WaitForTaskGeneric()
 	else
 		getJobList $1 $5
 		echo "#$JOBSTATUSJSON" 1>&2
-		echo "#Note: Not waiting for completion, use otc task show $1 to monitor and otc task wait to wait)"
+		echo "#Note: Not waiting for completion, use otc $6 show $1 to monitor and otc $6 wait to wait)"
 	fi
 }
 
@@ -5459,7 +5460,7 @@ WaitForTaskGeneric()
 # $4 = Field to output (optional)
 WaitForTask()
 {
-	WaitForTaskGeneric "$1" "$2" "$3" "$4" "$AUTH_URL_ECS_JOB"
+	WaitForTaskGeneric "$1" "$2" "$3" "$4" "$AUTH_URL_ECS_JOB" "task"
 }
 
 # Wait for workspace job to completely finish (if WAIT_FOR_JOB==true),
@@ -5470,7 +5471,7 @@ WaitForTask()
 # $4 = Field to output (optional)
 WaitForWorkspaceJob()
 {
-	WaitForTaskGeneric "$1" "$2" "$3" "$4" "$AUTH_URL_WORKSPACE_JOBS"
+	WaitForTaskGeneric "$1" "$2" "$3" "$4" "$AUTH_URL_WORKSPACE_JOBS" "workspace-job"
 }
 
 # Wait for full completion if WAIT_FOR_JOB is "true", not at all if set to something else,
