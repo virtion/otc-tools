@@ -4181,7 +4181,7 @@ getECSlog()
 	return $RC
 }
 
-# ECS helpsers
+# ECS helpers
 getECSJOBList()
 {
 	if test -z "$1"; then echo
