@@ -1622,7 +1622,7 @@ dehHelp()
 workspaceHelp()
 {
 	echo "--- Workspace ---"
-	echo "otc workspace list      # query workspace details"
+	echo "otc workspace query           # query workspace details"
 }
 
 desktopHelp()
@@ -6559,7 +6559,7 @@ getMeta()
 	return $RC
 }
 
-listWorkspaces()
+queryWorkspace()
 {
 	URL="$BASEURL/v1.0/$OS_PROJECT_ID/workspaces"
 
@@ -7913,8 +7913,8 @@ elif [ "$MAINCOM" == "deh" -a "$SUBCOM" == "delete" ]; then
 
 elif [ "$MAINCOM" == "workspace" -a "$SUBCOM" == "help" ]; then
 	workspaceHelp
-elif [ "$MAINCOM" == "workspace" -a "$SUBCOM" == "list" ]; then
-	listWorkspaces
+elif [ "$MAINCOM" == "workspace" -a "$SUBCOM" == "query" ]; then
+	queryWorkspace
 
 elif [ "$MAINCOM" == "desktop" -a "$SUBCOM" == "help" ]; then
 	desktopHelp
