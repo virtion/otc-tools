@@ -908,6 +908,10 @@ getIAMToken()
 	AUTH_URL_DIS="${AUTH_URL_MRS/mrs/dis}/v2/$OS_PROJECT_ID"
 	AUTH_URL_DCAAS="${NEUTRON_URL/vpc/dcaas}/v2.0/dcaas"
 	AUTH_URL_MKT="${BASEURL/iam/marketplace}/v1"
+
+	AUTH_URL_DESKTOPS="$BASEURL/v1.0/$OS_PROJECT_ID/desktops"
+	AUTH_URL_WORKSPACES="$BASEURL/v1.0/$OS_PROJECT_ID/workspaces"
+	AUTH_URL_WORKSPACE_JOBS="$BASEURL/v1.0/$OS_PROJECT_ID/workspace-jobs"
 }
 
 build_data_volumes_json()
@@ -6573,7 +6577,7 @@ getMeta()
 
 queryWorkspace()
 {
-	URL="$BASEURL/v1.0/$OS_PROJECT_ID/workspaces"
+	URL="$AUTH_URL_WORKSPACES"
 
 	curlgetauth $TOKEN "$URL" | jq -r '.ad_domains.domain_type + "   " + .ad_domains.domain_name + "   " + .status + "   " + .access_mode + "   " + .internet_access_address' | sed -r '/^\s*$/d'
 
@@ -6630,7 +6634,7 @@ applyWorkspace_getLocalAD()
 
 applyWorkspace()
 {
-	URL="$BASEURL/v1.0/$OS_PROJECT_ID/workspaces"
+	URL="$AUTH_URL_WORKSPACES"
 
 	if [ "$VPCNAME" != "" ]; then convertVPCNameToId "$VPCNAME"; fi
 	if [ "$SUBNETNAME" != "" ]; then convertSUBNETNameToId "$SUBNETNAME" "$VPCID"; fi
@@ -6658,7 +6662,7 @@ applyWorkspace()
 
 listDesktops()
 {
-	URL="$BASEURL/v1.0/$OS_PROJECT_ID/desktops"
+	URL="$AUTH_URL_DESKTOPS"
 
 	curlgetauth $TOKEN "$URL" | jq -r '.desktops[] | .desktop_id + "   " + .computer_name + "   " + .ip_address + "   " + .user_name + "   " + .user_group + "   " + .desktop_type' | sed -r '/^\s*$/d'
 
