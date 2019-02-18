@@ -1639,6 +1639,7 @@ workspaceHelp()
 	echo "    --active-dns-ip           <IP>        # (LOCAL_AD only)"
 	echo "    --access-mode             INTERNET | DEDICATED | BOTH"
 	echo "    --[no]wait"
+	echo "otc workspace cancel          # cancel workspace"
 }
 
 workspaceJobHelp()
@@ -6720,6 +6721,20 @@ applyWorkspace()
 	WaitForWorkspaceJob $JOBID
 }
 
+cancelWorkspace()
+{
+	URL="$AUTH_URL_WORKSPACES"
+
+	OUTPUT=`curldeleteauth "$TOKEN" "$URL"`
+	RC=$?
+
+	if test $RC != 0; then echo "ERROR canceling workspace" 1>&2; exit $RC; fi
+
+	JOBID=$(echo "$OUTPUT" | jq '.job_id' | tr -d '"')
+	if test -z "$JOBID" -o "$JOBID" = "null"; then echo "ERROR: $OUTPUT" 2>&1; exit 2; fi
+	WaitForWorkspaceJob $JOBID
+}
+
 listDesktops()
 {
 	URL="$AUTH_URL_DESKTOPS"
@@ -8083,6 +8098,8 @@ elif [ "$MAINCOM" == "workspace" -a "$SUBCOM" == "query" ]; then
 	queryWorkspace
 elif [ "$MAINCOM" == "workspace" -a "$SUBCOM" == "apply" ]; then
 	applyWorkspace
+elif [ "$MAINCOM" == "workspace" -a "$SUBCOM" == "cancel" ]; then
+	cancelWorkspace
 
 elif [ "$MAINCOM" == "workspace-job" -a "$SUBCOM" == "help" ]; then
 	workspaceJobHelp
