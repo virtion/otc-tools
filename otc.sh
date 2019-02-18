@@ -6848,7 +6848,7 @@ while test "${1:0:2}" == '--'; do
 done
 
 # Specific options
-if [ "${SUBCOM:0:6}" == "create" -o "${SUBCOM:0:5}" == "apply" -o "$SUBCOM" == "addlistener" -o "${SUBCOM:0:6}" == "update" -o "$SUBCOM" == "register" -o "$SUBCOM" == "download" -o "$SUBCOM" == "copy" -o "$SUBCOM" == "reboot" -o "$SUBCOM" == "start" -o "$SUBCOM" = "stop" ] || [[ "$SUBCOM" == *-instances ]]; then
+if [ "${SUBCOM:0:6}" == "create" -o "${SUBCOM:0:5}" == "apply" -o "${SUBCOM:0:6}" == "cancel" -o "$SUBCOM" == "addlistener" -o "${SUBCOM:0:6}" == "update" -o "$SUBCOM" == "register" -o "$SUBCOM" == "download" -o "$SUBCOM" == "copy" -o "$SUBCOM" == "reboot" -o "$SUBCOM" == "start" -o "$SUBCOM" = "stop" ] || [[ "$SUBCOM" == *-instances ]]; then
 	while [[ $# > 0 ]]; do
 		key="$1"
 		case $key in
