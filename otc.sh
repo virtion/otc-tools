@@ -1623,6 +1623,18 @@ workspaceHelp()
 {
 	echo "--- Workspace ---"
 	echo "otc workspace query           # query workspace details"
+	echo "otc workspace apply           # apply for workspace"
+	echo "    --az                      <az>"
+	echo "    --vpc-name                <vpc>"
+	echo "    --subnet-name             <subnet>"
+	echo "    --domain-type             LITE_AD | LOCAL_AD"
+	echo "    --domain-name             <FQDN>"
+	echo "    --domain-admin-account    <username>"
+	echo "    --domain-admin-password   <password>"
+	echo "    --active-domain-ip        <IP>        # (LOCAL_AD only)"
+	echo "    --active-dns-ip           <IP>        # (LOCAL_AD only)"
+	echo "    --access-mode             INTERNET | DEDICATED | BOTH"
+	echo "    --[no]wait"
 }
 
 desktopHelp()
@@ -6568,6 +6580,82 @@ queryWorkspace()
 	return ${PIPESTATUS[0]}
 }
 
+applyWorkspace_getLiteAD()
+{
+	REQ_CREATE_WORKSPACE="
+	{
+		\"ad_domains\": {
+			\"domain_type\": \"$DOMAINTYPE\",
+			\"domain_name\": \"$DOMAINNAME\",
+			\"domain_admin_account\": \"$DOMAINADMINACCOUNT\",
+			\"domain_password\": \"$DOMAINADMINPASSWORD\"
+		},
+		\"vpc_id\": \"$VPCID\",
+		\"subnet_ids\": [
+			{
+				\"subnet_id\": \"$SUBNETID\"
+			}
+		],
+		\"access_mode\": \"$ACCESSMODE\",
+		\"availablity_zone\": \"$AZ\"
+	}"
+
+	export REQ_CREATE_WORKSPACE
+}
+
+applyWorkspace_getLocalAD()
+{
+	REQ_CREATE_WORKSPACE="
+	{
+		\"ad_domains\": {
+			\"domain_type\": \"$DOMAINTYPE\",
+			\"domain_name\": \"$DOMAINNAME\",
+			\"domain_admin_account\": \"$DOMAINADMINACCOUNT\",
+			\"domain_password\": \"$DOMAINADMINPASSWORD\",
+			\"active_domain_ip\": \"$ACTIVEDOMAINIP\"
+			\"active_dns_ip\": \"$ACTIVEDNSIP\"
+		},
+		\"vpc_id\": \"$VPCID\",
+		\"subnet_ids\": [
+			{
+				\"subnet_id\": \"$SUBNETID\"
+			}
+		],
+		\"access_mode\": \"$ACCESSMODE\",
+		\"availablity_zone\": \"$AZ\"
+	}"
+
+	export REQ_CREATE_WORKSPACE
+}
+
+applyWorkspace()
+{
+	URL="$BASEURL/v1.0/$OS_PROJECT_ID/workspaces"
+
+	if [ "$VPCNAME" != "" ]; then convertVPCNameToId "$VPCNAME"; fi
+	if [ "$SUBNETNAME" != "" ]; then convertSUBNETNameToId "$SUBNETNAME" "$VPCID"; fi
+
+	if [ "$DOMAINTYPE" = "LITE_AD" ]; then
+		applyWorkspace_getLiteAD
+	elif [ "$DOMAINTYPE" = "LOCAL_AD" ]; then
+		applyWorkspace_getLocalAD
+	else
+		echo "ERROR: Domain type '$DOMAINTYPE' not supported" 1>&2
+		exit 2
+	fi
+
+	echo "$REQ_CREATE_WORKSPACE"
+
+	OUTPUT=`curlpostauth "$TOKEN" "$REQ_CREATE_WORKSPACE" "$URL"`
+	RC=$?
+
+	if test $RC != 0; then echo "ERROR creating workspace" 1>&2; exit $RC; fi
+
+	TASKID=$(echo "$OUTPUT" | jq '.job_id' | tr -d '"')
+	if test -z "$TASKID" -o "$TASKID" = "null"; then echo "ERROR: $OUTPUT" 2>&1; exit 2; fi
+	WaitForTask $TASKID
+}
+
 listDesktops()
 {
 	URL="$BASEURL/v1.0/$OS_PROJECT_ID/desktops"
@@ -6680,7 +6768,7 @@ while test "${1:0:2}" == '--'; do
 done
 
 # Specific options
-if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" == "addlistener" -o "${SUBCOM:0:6}" == "update" -o "$SUBCOM" == "register" -o "$SUBCOM" == "download" -o "$SUBCOM" == "copy" -o "$SUBCOM" == "reboot" -o "$SUBCOM" == "start" -o "$SUBCOM" = "stop" ] || [[ "$SUBCOM" == *-instances ]]; then
+if [ "${SUBCOM:0:6}" == "create" -o "${SUBCOM:0:5}" == "apply" -o "$SUBCOM" == "addlistener" -o "${SUBCOM:0:6}" == "update" -o "$SUBCOM" == "register" -o "$SUBCOM" == "download" -o "$SUBCOM" == "copy" -o "$SUBCOM" == "reboot" -o "$SUBCOM" == "start" -o "$SUBCOM" = "stop" ] || [[ "$SUBCOM" == *-instances ]]; then
 	while [[ $# > 0 ]]; do
 		key="$1"
 		case $key in
@@ -6848,6 +6936,20 @@ if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" == "addlistener" -o "${SUBCOM:0:6}
 				NAME="$2"; shift;;
 			--domain)
 				DOMAIN="$2"; shift;;
+			--domain-type)
+				DOMAINTYPE="$2"; shift;;
+			--domain-name)
+				DOMAINNAME="$2"; shift;;
+			--domain-admin-account)
+				DOMAINADMINACCOUNT="$2"; shift;;
+			--domain-admin-password)
+				DOMAINADMINPASSWORD="$2"; shift;;
+			--active-domain-ip)
+				ACTIVEDOMAINIP="$2"; shift;;
+			--active-dns-ip)
+				ACTIVEDNSIP="$2"; shift;;
+			--access-mode)
+				ACCESSMODE="$2"; shift;;
 			--timeout|--elbtimeout)
 				ELBTIMEOUT="$2"; shift;;
 			--cookieto|--cookietimeout)
@@ -7915,6 +8017,8 @@ elif [ "$MAINCOM" == "workspace" -a "$SUBCOM" == "help" ]; then
 	workspaceHelp
 elif [ "$MAINCOM" == "workspace" -a "$SUBCOM" == "query" ]; then
 	queryWorkspace
+elif [ "$MAINCOM" == "workspace" -a "$SUBCOM" == "apply" ]; then
+	applyWorkspace
 
 elif [ "$MAINCOM" == "desktop" -a "$SUBCOM" == "help" ]; then
 	desktopHelp
