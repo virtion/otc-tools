@@ -1641,6 +1641,13 @@ workspaceHelp()
 	echo "    --[no]wait"
 }
 
+workspaceJobHelp()
+{
+	echo "--- Workspace Job Management ---"
+	echo "otc workspace-job show <id>         # show status of job <id>"
+	echo "otc workspace-job wait <id> [sec]   # wait for job <id>, poll every sec seconds (default: 2)"
+}
+
 desktopHelp()
 {
 	echo "--- Workspace Desktops ---"
@@ -1719,6 +1726,8 @@ printHelp()
 	dehHelp
 	echo
 	workspaceHelp
+	echo
+	workspaceJobHelp
 	echo
 	desktopHelp
 	echo
@@ -4219,6 +4228,18 @@ getECSJOBList()
 	return $RC
 }
 
+# Workspace helpers
+getWorkspaceJobList()
+{
+	getJobList "$1" "$AUTH_URL_WORKSPACE_JOBS"
+	RC=$?
+
+	export WORKSPACEJOBSTATUSJSON=$JOBSTATUSJSON
+	export WORKSPACEJOBSTATUS=$JOBSTATUS
+
+	return $RC
+}
+
 getFileContentJSON()
 {
 	local INJECTFILE=$1
@@ -5438,6 +5459,17 @@ WaitForTaskGeneric()
 WaitForTask()
 {
 	WaitForTaskGeneric "$1" "$2" "$3" "$4" "$AUTH_URL_ECS_JOB"
+}
+
+# Wait for workspace job to completely finish (if WAIT_FOR_JOB==true),
+# optionally output field ($4), otherwise don't wait
+# $1 = JOBID
+# $2 = PollFreq (s), default 2s
+# $3 = MaxWait (in multiples of 2xPollFreq), default 2hrs
+# $4 = Field to output (optional)
+WaitForWorkspaceJob()
+{
+	WaitForTaskGeneric "$1" "$2" "$3" "$4" "$AUTH_URL_WORKSPACE_JOBS"
 }
 
 # Wait for full completion if WAIT_FOR_JOB is "true", not at all if set to something else,
@@ -6683,9 +6715,9 @@ applyWorkspace()
 
 	if test $RC != 0; then echo "ERROR creating workspace" 1>&2; exit $RC; fi
 
-	TASKID=$(echo "$OUTPUT" | jq '.job_id' | tr -d '"')
-	if test -z "$TASKID" -o "$TASKID" = "null"; then echo "ERROR: $OUTPUT" 2>&1; exit 2; fi
-	WaitForTask $TASKID
+	JOBID=$(echo "$OUTPUT" | jq '.job_id' | tr -d '"')
+	if test -z "$JOBID" -o "$JOBID" = "null"; then echo "ERROR: $OUTPUT" 2>&1; exit 2; fi
+	WaitForWorkspaceJob $JOBID
 }
 
 listDesktops()
@@ -8051,6 +8083,14 @@ elif [ "$MAINCOM" == "workspace" -a "$SUBCOM" == "query" ]; then
 	queryWorkspace
 elif [ "$MAINCOM" == "workspace" -a "$SUBCOM" == "apply" ]; then
 	applyWorkspace
+
+elif [ "$MAINCOM" == "workspace-job" -a "$SUBCOM" == "help" ]; then
+	workspaceJobHelp
+elif [ "$MAINCOM" == "workspace-job" -a "$SUBCOM" == "show" ]; then
+	getWorkspaceJobList $1
+	echo "$WORKSPACEJOBSTATUSJSON"
+elif [ "$MAINCOM" == "workspace-job" -a "$SUBCOM" == "wait" ]; then
+	WaitForWorkspaceJob
 
 elif [ "$MAINCOM" == "desktop" -a "$SUBCOM" == "help" ]; then
 	desktopHelp
