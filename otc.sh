@@ -1655,6 +1655,7 @@ workspaceDesktopHelp()
 {
 	echo "--- Workspace Desktops ---"
 	echo "otc workspace-desktop list          # query list of workspace desktops"
+	echo "otc workspace-desktop show <id>     # query details of workspace desktop <id>"
 }
 
 workspaceDesktopUserHelp()
@@ -6763,6 +6764,20 @@ listWorkspaceDesktops()
 	return ${PIPESTATUS[0]}
 }
 
+queryWorkspaceDesktop()
+{
+	if test -z "$1"; then echo
+		echo "ERROR: Need to pass desktop ID" 1>&2
+		exit 1
+	fi
+
+	URL="$AUTH_URL_WORKSPACE_DESKTOPS/$1"
+
+	curlgetauth $TOKEN "$URL" | jq -r '.desktop | .desktop_id + "   " + .computer_name + "   " + .status + "   " + .created + "   " + .login_status + "   " + .user_name + "   " + .user_group + "   " + .product_id + "   " + .availability_zone + "   " + [.addresses[][0].addr][0] + "   " + [.addresses[][0].addr][1] + "   \"" + .metadata.desktop_os_version + "\""' | sed -r '/^\s*$/d'
+
+	return ${PIPESTATUS[0]}
+}
+
 listWorkspaceDesktopUsers()
 {
 	URL="$AUTH_URL_WORKSPACE_DESKTOP_USERS"
@@ -8152,6 +8167,8 @@ elif [ "$MAINCOM" == "workspace-desktop" -a "$SUBCOM" == "help" ]; then
 	workspaceDesktopHelp
 elif [ "$MAINCOM" == "workspace-desktop" -a "$SUBCOM" == "list" ]; then
 	listWorkspaceDesktops
+elif [ "$MAINCOM" == "workspace-desktop" -a "$SUBCOM" == "show" ]; then
+	queryWorkspaceDesktop $1
 
 elif [ "$MAINCOM" == "workspace-desktop-user" -a "$SUBCOM" == "help" ]; then
 	workspaceDesktopUserHelp
