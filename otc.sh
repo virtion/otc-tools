@@ -913,6 +913,7 @@ getIAMToken()
 	AUTH_URL_WORKSPACE_JOBS="$BASEURL/v1.0/$OS_PROJECT_ID/workspace-jobs"
 	AUTH_URL_WORKSPACE_PRODUCTS="$BASEURL/v1.0/$OS_PROJECT_ID/products"
 	AUTH_URL_WORKSPACE_DESKTOPS="$BASEURL/v1.0/$OS_PROJECT_ID/desktops"
+	AUTH_URL_WORKSPACE_DESKTOP_USERS="$BASEURL/v1.0/$OS_PROJECT_ID/desktop-users"
 }
 
 build_data_volumes_json()
@@ -1656,6 +1657,12 @@ workspaceDesktopHelp()
 	echo "otc workspace-desktop list          # query list of workspace desktops"
 }
 
+workspaceDesktopUserHelp()
+{
+	echo "--- Workspace Desktop Users ---"
+	echo "otc workspace-desktop-user list     # query list of workspace desktop users"
+}
+
 workspaceProductHelp()
 {
 	echo "--- Workspace Products ---"
@@ -1738,6 +1745,8 @@ printHelp()
 	workspaceJobHelp
 	echo
 	workspaceDesktopHelp
+	echo
+	workspaceDesktopUserHelp
 	echo
 	workspaceProductHelp
 	echo
@@ -6754,6 +6763,15 @@ listWorkspaceDesktops()
 	return ${PIPESTATUS[0]}
 }
 
+listWorkspaceDesktopUsers()
+{
+	URL="$AUTH_URL_WORKSPACE_DESKTOP_USERS"
+
+	curlgetauth $TOKEN "$URL" | jq -r '.users[] | .user_name + "   " + .user_email + "   " + .ad_domains.domain_name + "   " + .ad_domains.domain_type' | sed -r '/^\s*$/d'
+
+	return ${PIPESTATUS[0]}
+}
+
 listWorkspaceProducts()
 {
 	URL="$AUTH_URL_WORKSPACE_PRODUCTS"
@@ -7165,6 +7183,7 @@ if [ "$MAINCOM" = "natgw" ]; then MAINCOM="nat"; fi
 if [ "$MAINCOM" = "as" ]; then MAINCOM="asgroup"; fi
 if [ "$MAINCOM" = "workspaces" ]; then MAINCOM="workspace"; fi
 if [ "$MAINCOM" = "workspace-desktops" ]; then MAINCOM="workspace-desktop"; fi
+if [ "$MAINCOM" = "workspace-desktop-users" ]; then MAINCOM="workspace-desktop-user"; fi
 if [ "$MAINCOM" = "workspace-products" ]; then MAINCOM="workspace-product"; fi
 
 # Some IAM functions need special handling
@@ -8133,6 +8152,11 @@ elif [ "$MAINCOM" == "workspace-desktop" -a "$SUBCOM" == "help" ]; then
 	workspaceDesktopHelp
 elif [ "$MAINCOM" == "workspace-desktop" -a "$SUBCOM" == "list" ]; then
 	listWorkspaceDesktops
+
+elif [ "$MAINCOM" == "workspace-desktop-user" -a "$SUBCOM" == "help" ]; then
+	workspaceDesktopUserHelp
+elif [ "$MAINCOM" == "workspace-desktop-user" -a "$SUBCOM" == "list" ]; then
+	listWorkspaceDesktopUsers
 
 elif [ "$MAINCOM" == "workspace-product" -a "$SUBCOM" == "help" ]; then
 	workspaceProductHelp
