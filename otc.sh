@@ -1656,6 +1656,10 @@ workspaceDesktopHelp()
 	echo "--- Workspace Desktops ---"
 	echo "otc workspace-desktop list          # query list of workspace desktops"
 	echo "otc workspace-desktop show <id>     # query details of workspace desktop <id>"
+	echo "otc workspace-desktop start <id>    # start workspace desktop <id>"
+	echo "otc workspace-desktop stop <id>     # stop workspace desktop <id>"
+	echo "otc workspace-desktop reboot <id>   # reboot workspace desktop <id>"
+	echo "otc workspace-desktop reset <id>    # reset workspace desktop <id>"
 }
 
 workspaceDesktopUserHelp()
@@ -6778,6 +6782,86 @@ queryWorkspaceDesktop()
 	return ${PIPESTATUS[0]}
 }
 
+executeWorkspaceDesktopAction()
+{
+	if test -z "$1"; then echo
+		echo "ERROR: Need to pass desktop ID" 1>&2
+		exit 1
+	fi
+
+	if test -z "$2"; then echo
+		echo "ERROR: Need to pass desktop action request" 1>&2
+		exit 1
+	fi
+
+	URL="$AUTH_URL_WORKSPACE_DESKTOPS/$1/action"
+
+	REQ_DESKTOP_ACTION="$2"
+
+	echo "$REQ_DESKTOP_ACTION"
+
+	OUTPUT=`curlpostauth "$TOKEN" "$REQ_DESKTOP_ACTION" "$URL"`
+	RC=$?
+
+	if test $RC != 0; then echo "ERROR executing desktop action" 1>&2; exit $RC; fi
+
+	if [ "$OUTPUT" != "" ]; then
+		ERROR_CODE=$(echo "$OUTPUT" | jq '.error_code' | tr -d '"')
+		ERROR_TEXT=$(echo "$OUTPUT" | jq '.error_msg'  | tr -d '"')
+
+		if [ "$ERROR_CODE" != "" -a "$ERROR_CODE" != "null" ]; then
+			echo "ERROR: $ERROR_TEXT ($ERROR_CODE)" 2>&1
+			exit 2
+		fi
+	else
+		echo "Desktop action '$SUBCOM' successfully executed."
+	fi
+}
+
+startWorkspaceDesktop()
+{
+	REQ_DESKTOP_ACTION="
+	{
+		\"os-start\": null
+	}"
+
+	executeWorkspaceDesktopAction "$1" "$REQ_DESKTOP_ACTION"
+}
+
+stopWorkspaceDesktop()
+{
+	REQ_DESKTOP_ACTION="
+	{
+		\"os-stop\": null
+	}"
+
+	executeWorkspaceDesktopAction "$1" "$REQ_DESKTOP_ACTION"
+}
+
+rebootWorkspaceDesktop()
+{
+	REQ_DESKTOP_ACTION="
+	{
+		\"reboot\": {
+			\"type\": \"SOFT\"
+		}
+	}"
+
+	executeWorkspaceDesktopAction "$1" "$REQ_DESKTOP_ACTION"
+}
+
+resetWorkspaceDesktop()
+{
+	REQ_DESKTOP_ACTION="
+	{
+		\"reboot\": {
+			\"type\": \"HARD\"
+		}
+	}"
+
+	executeWorkspaceDesktopAction "$1" "$REQ_DESKTOP_ACTION"
+}
+
 listWorkspaceDesktopUsers()
 {
 	URL="$AUTH_URL_WORKSPACE_DESKTOP_USERS"
@@ -8169,6 +8253,14 @@ elif [ "$MAINCOM" == "workspace-desktop" -a "$SUBCOM" == "list" ]; then
 	listWorkspaceDesktops
 elif [ "$MAINCOM" == "workspace-desktop" -a "$SUBCOM" == "show" ]; then
 	queryWorkspaceDesktop $1
+elif [ "$MAINCOM" == "workspace-desktop" -a "$SUBCOM" == "start" ]; then
+	startWorkspaceDesktop $1
+elif [ "$MAINCOM" == "workspace-desktop" -a "$SUBCOM" == "stop" ]; then
+	stopWorkspaceDesktop $1
+elif [ "$MAINCOM" == "workspace-desktop" -a "$SUBCOM" == "reboot" ]; then
+	rebootWorkspaceDesktop $1
+elif [ "$MAINCOM" == "workspace-desktop" -a "$SUBCOM" == "reset" ]; then
+	resetWorkspaceDesktop $1
 
 elif [ "$MAINCOM" == "workspace-desktop-user" -a "$SUBCOM" == "help" ]; then
 	workspaceDesktopUserHelp
