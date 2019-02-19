@@ -909,6 +909,7 @@ getIAMToken()
 	AUTH_URL_DCAAS="${NEUTRON_URL/vpc/dcaas}/v2.0/dcaas"
 	AUTH_URL_MKT="${BASEURL/iam/marketplace}/v1"
 
+	AUTH_URL_WS_PRODUCTS="$BASEURL/v1.0/$OS_PROJECT_ID/products"
 	AUTH_URL_DESKTOPS="$BASEURL/v1.0/$OS_PROJECT_ID/desktops"
 	AUTH_URL_WORKSPACES="$BASEURL/v1.0/$OS_PROJECT_ID/workspaces"
 	AUTH_URL_WORKSPACE_JOBS="$BASEURL/v1.0/$OS_PROJECT_ID/workspace-jobs"
@@ -1655,6 +1656,12 @@ desktopHelp()
 	echo "otc desktop list        # query list of workspace desktops"
 }
 
+workspaceProductHelp()
+{
+	echo "--- Workspace Products ---"
+	echo "otc workspace-product list          # query list of workspace products"
+}
+
 mdsHelp()
 {
 	echo "--- Metadata helper ---"
@@ -1731,6 +1738,8 @@ printHelp()
 	workspaceJobHelp
 	echo
 	desktopHelp
+	echo
+	workspaceProductHelp
 	echo
 	customHelp
 	echo
@@ -6745,6 +6754,15 @@ listDesktops()
 	return ${PIPESTATUS[0]}
 }
 
+listWorkspaceProducts()
+{
+	URL="$AUTH_URL_WS_PRODUCTS"
+
+	curlgetauth $TOKEN "$URL" | jq -r '.products[] | .product_id + "   " + .flavor_id + "   " + .type + "   " + .os_type + "   " + .descriptions' | sed -r '/^\s*$/d'
+
+	return ${PIPESTATUS[0]}
+}
+
 
 ##########################################################################################
 
@@ -7147,6 +7165,7 @@ if [ "$MAINCOM" = "natgw" ]; then MAINCOM="nat"; fi
 if [ "$MAINCOM" = "as" ]; then MAINCOM="asgroup"; fi
 if [ "$MAINCOM" = "workspaces" ]; then MAINCOM="workspace"; fi
 if [ "$MAINCOM" = "desktops" ]; then MAINCOM="desktop"; fi
+if [ "$MAINCOM" = "workspace-products" ]; then MAINCOM="workspace-product"; fi
 
 # Some IAM functions need special handling
 if [ "$MAINCOM" = "iam" -a "$SUBCOM" = "catalog" ]; then OUTPUT_CAT=1; fi
@@ -8114,6 +8133,11 @@ elif [ "$MAINCOM" == "desktop" -a "$SUBCOM" == "help" ]; then
 	desktopHelp
 elif [ "$MAINCOM" == "desktop" -a "$SUBCOM" == "list" ]; then
 	listDesktops
+
+elif [ "$MAINCOM" == "workspace-product" -a "$SUBCOM" == "help" ]; then
+	workspaceProductHelp
+elif [ "$MAINCOM" == "workspace-product" -a "$SUBCOM" == "list" ]; then
+	listWorkspaceProducts
 
 elif [ "$MAINCOM" == "mds" -a "$SUBCOM" == "help" ]; then
 	mdsHelp
