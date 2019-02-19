@@ -909,10 +909,10 @@ getIAMToken()
 	AUTH_URL_DCAAS="${NEUTRON_URL/vpc/dcaas}/v2.0/dcaas"
 	AUTH_URL_MKT="${BASEURL/iam/marketplace}/v1"
 
-	AUTH_URL_WS_PRODUCTS="$BASEURL/v1.0/$OS_PROJECT_ID/products"
-	AUTH_URL_DESKTOPS="$BASEURL/v1.0/$OS_PROJECT_ID/desktops"
 	AUTH_URL_WORKSPACES="$BASEURL/v1.0/$OS_PROJECT_ID/workspaces"
 	AUTH_URL_WORKSPACE_JOBS="$BASEURL/v1.0/$OS_PROJECT_ID/workspace-jobs"
+	AUTH_URL_WORKSPACE_PRODUCTS="$BASEURL/v1.0/$OS_PROJECT_ID/products"
+	AUTH_URL_WORKSPACE_DESKTOPS="$BASEURL/v1.0/$OS_PROJECT_ID/desktops"
 }
 
 build_data_volumes_json()
@@ -1650,10 +1650,10 @@ workspaceJobHelp()
 	echo "otc workspace-job wait <id> [sec]   # wait for job <id>, poll every sec seconds (default: 2)"
 }
 
-desktopHelp()
+workspaceDesktopHelp()
 {
 	echo "--- Workspace Desktops ---"
-	echo "otc desktop list        # query list of workspace desktops"
+	echo "otc workspace-desktop list          # query list of workspace desktops"
 }
 
 workspaceProductHelp()
@@ -1737,7 +1737,7 @@ printHelp()
 	echo
 	workspaceJobHelp
 	echo
-	desktopHelp
+	workspaceDesktopHelp
 	echo
 	workspaceProductHelp
 	echo
@@ -6745,9 +6745,9 @@ cancelWorkspace()
 	WaitForWorkspaceJob $JOBID
 }
 
-listDesktops()
+listWorkspaceDesktops()
 {
-	URL="$AUTH_URL_DESKTOPS"
+	URL="$AUTH_URL_WORKSPACE_DESKTOPS"
 
 	curlgetauth $TOKEN "$URL" | jq -r '.desktops[] | .desktop_id + "   " + .computer_name + "   " + .ip_address + "   " + .user_name + "   " + .user_group + "   " + .desktop_type' | sed -r '/^\s*$/d'
 
@@ -6756,7 +6756,7 @@ listDesktops()
 
 listWorkspaceProducts()
 {
-	URL="$AUTH_URL_WS_PRODUCTS"
+	URL="$AUTH_URL_WORKSPACE_PRODUCTS"
 
 	curlgetauth $TOKEN "$URL" | jq -r '.products[] | .product_id + "   " + .flavor_id + "   " + .type + "   " + .os_type + "   " + .descriptions' | sed -r '/^\s*$/d'
 
@@ -7164,7 +7164,7 @@ if [ "$MAINCOM" = "marketplace" ]; then MAINCOM="products"; fi
 if [ "$MAINCOM" = "natgw" ]; then MAINCOM="nat"; fi
 if [ "$MAINCOM" = "as" ]; then MAINCOM="asgroup"; fi
 if [ "$MAINCOM" = "workspaces" ]; then MAINCOM="workspace"; fi
-if [ "$MAINCOM" = "desktops" ]; then MAINCOM="desktop"; fi
+if [ "$MAINCOM" = "workspace-desktops" ]; then MAINCOM="workspace-desktop"; fi
 if [ "$MAINCOM" = "workspace-products" ]; then MAINCOM="workspace-product"; fi
 
 # Some IAM functions need special handling
@@ -8129,10 +8129,10 @@ elif [ "$MAINCOM" == "workspace-job" -a "$SUBCOM" == "show" ]; then
 elif [ "$MAINCOM" == "workspace-job" -a "$SUBCOM" == "wait" ]; then
 	WaitForWorkspaceJob
 
-elif [ "$MAINCOM" == "desktop" -a "$SUBCOM" == "help" ]; then
-	desktopHelp
-elif [ "$MAINCOM" == "desktop" -a "$SUBCOM" == "list" ]; then
-	listDesktops
+elif [ "$MAINCOM" == "workspace-desktop" -a "$SUBCOM" == "help" ]; then
+	workspaceDesktopHelp
+elif [ "$MAINCOM" == "workspace-desktop" -a "$SUBCOM" == "list" ]; then
+	listWorkspaceDesktops
 
 elif [ "$MAINCOM" == "workspace-product" -a "$SUBCOM" == "help" ]; then
 	workspaceProductHelp
