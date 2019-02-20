@@ -4221,12 +4221,12 @@ getECSlog()
 
 getJobList()
 {
-	if test -z "$1"; then echo
+	if test -z "$1"; then
 		echo "ERROR: Need to pass job ID to getJobList" 1>&2
 		exit 1
 	fi
 
-	if test -z "$2"; then echo
+	if test -z "$2"; then
 		echo "ERROR: Need to pass job URL to getJobList" 1>&2
 		exit 1
 	fi
@@ -6771,7 +6771,7 @@ listWorkspaceDesktops()
 
 queryWorkspaceDesktop()
 {
-	if test -z "$1"; then echo
+	if test -z "$1"; then
 		echo "ERROR: Need to pass desktop ID or 'all'" 1>&2
 		exit 1
 	fi
@@ -6793,12 +6793,12 @@ queryWorkspaceDesktop()
 
 executeWorkspaceDesktopAction()
 {
-	if test -z "$1"; then echo
+	if test -z "$1"; then
 		echo "ERROR: Need to pass desktop ID" 1>&2
 		exit 1
 	fi
 
-	if test -z "$2"; then echo
+	if test -z "$2"; then
 		echo "ERROR: Need to pass desktop action request" 1>&2
 		exit 1
 	fi
