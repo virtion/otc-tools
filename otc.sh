@@ -6764,7 +6764,7 @@ listWorkspaceDesktops()
 {
 	URL="$AUTH_URL_WORKSPACE_DESKTOPS"
 
-	curlgetauth $TOKEN "$URL" | jq -r '.desktops[] | .desktop_id + "   " + .computer_name + "   " + .ip_address + "   " + .user_name + "   " + .user_group + "   " + .desktop_type' | sed -r '/^\s*$/d'
+	curlgetauth $TOKEN "$URL" | jq -r '.desktops[] | .desktop_id + "   " + .computer_name + "   " + .ip_address + "   " + .desktop_type + "   " + .user_name + "   " + .user_group + "   " + .created' | sed -r '/^\s*$/d'
 
 	return ${PIPESTATUS[0]}
 }
