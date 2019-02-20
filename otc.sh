@@ -1655,7 +1655,7 @@ workspaceDesktopHelp()
 {
 	echo "--- Workspace Desktops ---"
 	echo "otc workspace-desktop list          # query list of workspace desktops"
-	echo "otc workspace-desktop show <id>     # query details of workspace desktop <id>"
+	echo "otc workspace-desktop show <id>|all # query details of workspace desktop <id>"
 	echo "otc workspace-desktop start <id>    # start workspace desktop <id>"
 	echo "otc workspace-desktop stop <id>     # stop workspace desktop <id>"
 	echo "otc workspace-desktop reboot <id>   # reboot workspace desktop <id>"
@@ -6771,13 +6771,21 @@ listWorkspaceDesktops()
 queryWorkspaceDesktop()
 {
 	if test -z "$1"; then echo
-		echo "ERROR: Need to pass desktop ID" 1>&2
+		echo "ERROR: Need to pass desktop ID or 'all'" 1>&2
 		exit 1
 	fi
 
-	URL="$AUTH_URL_WORKSPACE_DESKTOPS/$1"
+	ID=$1
+	JQNAME='.desktop'
 
-	curlgetauth $TOKEN "$URL" | jq -r '.desktop | .desktop_id + "   " + .computer_name + "   " + .status + "   " + .created + "   " + .login_status + "   " + .user_name + "   " + .user_group + "   " + .product_id + "   " + .availability_zone + "   " + [.addresses[][0].addr][0] + "   " + [.addresses[][0].addr][1] + "   \"" + .metadata.desktop_os_version + "\""' | sed -r '/^\s*$/d'
+	if [ "$ID" = "all" ]; then
+		ID="detail"
+		JQNAME='.desktops[]'
+	fi
+
+	URL="$AUTH_URL_WORKSPACE_DESKTOPS/$ID"
+
+	curlgetauth $TOKEN "$URL" | jq -r $JQNAME' | .desktop_id + "   " + .computer_name + "   " + .status + "   " + .login_status + "   " + .user_name + "   " + .user_group + "   " + .availability_zone + "   " + .product_id + "   \"" + .metadata.desktop_os_version + "\"" + "   " + .created' | sed -r '/^\s*$/d'
 
 	return ${PIPESTATUS[0]}
 }
