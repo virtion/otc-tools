@@ -1661,6 +1661,27 @@ workspaceDesktopHelp()
 	echo "otc workspace-desktop stop <id>     # stop workspace desktop <id>"
 	echo "otc workspace-desktop reboot <id>   # reboot workspace desktop <id>"
 	echo "otc workspace-desktop reset <id>    # reset workspace desktop <id>"
+	echo "otc workspace-desktop create        # create workspace desktop"
+	echo "    --user-name           <user name>"
+	echo "    --user-group          ADMINISTRATORS | USERS"
+	echo "    --user-email          <mail address>"
+	echo "    --product-id          <id>"
+	echo "    --image-id            <id>"
+	echo "    --computer-name       <name>"
+	echo "    --security-group-name <name>"
+	echo "    --security-group-ids  <id>[,...]"
+	echo "    --disksize            <size>              # (size in GB)"
+	echo "    --disktype            SATA | SAS | SSD    # (default: SATA)"
+	echo "    --datadisks           <type:size>[,...]   # (like SSD:20)"
+	echo "    --subnet-name         <name>"
+	echo "    --az                  <zone>"
+	echo "    --tenancy             shared | dedicated  # (default: shared)"
+	echo "    --dedicated-host      <id or name>"
+	echo "    --license-type        system | byol"
+	echo "    --ou-name             <ou name>           # (LOCAL_AD only)"
+	echo "    --email-notification  true | false        # (LOCAL_AD only)"
+	echo "    --tags                <key=value>[,...]"
+	echo "    --[no]wait"
 	echo "otc workspace-desktop delete <id>   # delete workspace desktop"
 	echo "    --delete-users        true | false        # (default: false)"
 }
@@ -6873,6 +6894,127 @@ resetWorkspaceDesktop()
 	executeWorkspaceDesktopAction "$1" "$REQ_DESKTOP_ACTION"
 }
 
+createWorkspaceDesktop()
+{
+	URL="$AUTH_URL_WORKSPACE_DESKTOPS"
+
+	SECUGROUPNAMELIST="$SECUGROUPNAME"
+	if [ "$SECUGROUPNAMELIST" != "" ] && [ "$SECUGROUP" == "" ]; then
+		SECUGROUP=$(IFS=,; for SECUGROUPNAME in $SECUGROUPNAMELIST; do convertSECUGROUPNameToId "$SECUGROUPNAME"; printf ",$SECUGROUP";done)
+		SECUGROUP="${SECUGROUP#,}"
+	fi
+
+	SECUGROUPIDS=""
+	for id in ${SECUGROUP//,/ }; do
+		SECUGROUPIDS="$SECUGROUPIDS { \"id\": \"$id\" },"
+	done
+	SECUGROUPIDS="${SECUGROUPIDS%,}"
+
+	if [ "$SECUGROUPIDS" != "" ]; then
+		SECUGROUPIDS="\"security_groups\": [ \"$SECUGROUPIDS\" ],"
+	fi
+
+	if [ "$SUBNETID" != "" ]; then
+		NICS="\"nics\": [{
+				\"subnet_id\": \"$SUBNETID\"
+			}],"
+	fi
+
+	if test -n "$DATADISKS"; then
+		DATA_VOLUMES="
+			$(build_data_volumes_json $DATADISKS)"
+	fi
+
+	if [ "$TENANCY" != "" ]; then
+		if [ "$DEDICATED_HOST_ID" != "" ]; then
+			SCHEDULER_HINTS="
+				\"tenancy\": \"$TENANCY\",
+				\"dedicated_host_id\": \"$DEDICATED_HOST_ID\""
+		else
+			SCHEDULER_HINTS="
+				\"tenancy\": \"$TENANCY\""
+		fi
+	fi
+
+	if [ "$SCHEDULER_HINTS" != "" ]; then
+		SCHEDULER_HINTS="\"os:scheduler_hints\": {
+			\"$SCHEDULER_HINTS\"
+		},"
+	fi
+
+	if [ "$IMAGE_ID" != "" ]; then
+		IMAGE_ID="\"image_id\": \"$IMAGE_ID\","
+	fi
+
+	if [ "$OU_NAME" != "" ]; then
+		OU_NAME="\"ou_name\": \"$OU_NAME\","
+	fi
+
+	if [ "$LICENSE_TYPE" != "" ]; then
+		LICENSE_TYPE="\"license_type\": \"$LICENSE_TYPE\","
+	fi
+
+	if [ "$AZ" != "" ]; then
+		AZ="\"availablity_zone\": \"$AZ\","
+	fi
+
+	if [ "$USER_GROUP" != "" ]; then
+		USER_GROUP="\"user_group\": \"$USER_GROUP\","
+	fi
+
+	if [ "$DATA_VOLUMES" != "" ]; then
+		DATA_VOLUMES="\"data_volumes\": [ \"$DATA_VOLUMES\" ],"
+	fi
+
+	if [ "$EMAIL_NOTIFICATION" != "" ]; then
+		EMAIL_NOTIFICATION="\"email_notification\": \"$EMAIL_NOTIFICATION\","
+	fi
+
+	if [ "$TAGS" != "" ]; then
+		TAGS="\"tags\": [{ $(keyval2json $TAGS) }]"
+	fi
+
+	if [ "$EMAIL_NOTIFICATION" != "" -o "$TAGS" != "" ]; then
+		MORE=","
+	fi
+
+	REQ_CREATE_DESKTOPS="
+	{
+		\"desktops\": [{
+			\"user_name\": \"$USER_NAME\",
+			$USER_GROUP
+			\"user_email\": \"$USER_EMAIL\",
+			$IMAGE_ID
+			\"computer_name\": \"$COMPUTER_NAME\",
+			$SECUGROUPIDS
+			\"root_volume\": {
+				\"type\": \"$VOLUMETYPE\",
+				\"size\": \"$ROOTDISKSIZE\"
+			},
+			$DATA_VOLUMES
+			$NICS
+			$LICENSE_TYPE
+			$OU_NAME
+			$AZ
+			$SCHEDULER_HINTS
+			\"product_id\": \"$PRODUCT_ID\"
+		}] $MORE
+		$EMAIL_NOTIFICATION
+		$TAGS
+	}"
+
+	echo "$REQ_CREATE_DESKTOPS"
+
+	OUTPUT=`curlpostauth "$TOKEN" "$REQ_CREATE_DESKTOPS" "$URL"`
+	RC=$?
+
+	if test $RC != 0; then echo "ERROR creating desktop" 1>&2; exit $RC; fi
+
+	JOBID=$(echo "$OUTPUT" | jq '.job_id' | tr -d '"')
+	if test -z "$JOBID" -o "$JOBID" = "null"; then echo "ERROR: $OUTPUT" 2>&1; exit 2; fi
+	WaitForWorkspaceJob $JOBID
+}
+
 deleteWorkspaceDesktop()
 {
 	if test -z "$1"; then
@@ -7034,6 +7176,8 @@ if [ "${SUBCOM:0:6}" == "create" -o "${SUBCOM:0:5}" == "apply" -o "${SUBCOM:0:6}
 				VOLUME_NAME="$2"; shift;;
 			--volume-description)
 				VOLUME_DESC="$2"; shift;;
+			--tenancy)
+				TENANCY="$2"; shift;;
 			--dedicated-host|--dedicated-host-id)
 				DEDICATED_HOST_ID="$2"; shift;;
 			--dedicated)
@@ -7195,6 +7339,22 @@ if [ "${SUBCOM:0:6}" == "create" -o "${SUBCOM:0:5}" == "apply" -o "${SUBCOM:0:6}
 				ACTIVEDNSIP="$2"; shift;;
 			--access-mode)
 				ACCESSMODE="$2"; shift;;
+			--user-name)
+				USER_NAME="$2"; shift;;
+			--user-group)
+				USER_GROUP="$2"; shift;;
+			--user-email)
+				USER_EMAIL="$2"; shift;;
+			--product-id)
+				PRODUCT_ID="$2"; shift;;
+			--computer-name)
+				COMPUTER_NAME="$2"; shift;;
+			--license-type)
+				LICENSE_TYPE="$2"; shift;;
+			--ou-name)
+				OU_NAME="$2"; shift;;
+			--email-notification)
+				EMAIL_NOTIFICATION="$2"; shift;;
 			--delete-users)
 				DELETE_USERS="$2"; shift;;
 			--timeout|--elbtimeout)
@@ -8293,6 +8453,8 @@ elif [ "$MAINCOM" == "workspace-desktop" -a "$SUBCOM" == "reboot" ]; then
 	rebootWorkspaceDesktop $1
 elif [ "$MAINCOM" == "workspace-desktop" -a "$SUBCOM" == "reset" ]; then
 	resetWorkspaceDesktop $1
+elif [ "$MAINCOM" == "workspace-desktop" -a "$SUBCOM" == "create" ]; then
+	createWorkspaceDesktop
 elif [ "$MAINCOM" == "workspace-desktop" -a "$SUBCOM" == "delete" ]; then
 	deleteWorkspaceDesktop $1
 
