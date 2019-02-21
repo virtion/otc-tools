@@ -8254,7 +8254,7 @@ elif [ "$MAINCOM" == "workspace-job" -a "$SUBCOM" == "show" ]; then
 	getWorkspaceJobList $1
 	echo "$WORKSPACEJOBSTATUSJSON"
 elif [ "$MAINCOM" == "workspace-job" -a "$SUBCOM" == "wait" ]; then
-	WaitForWorkspaceJob
+	WaitForWorkspaceJob $1
 
 elif [ "$MAINCOM" == "workspace-desktop" -a "$SUBCOM" == "help" ]; then
 	workspaceDesktopHelp
