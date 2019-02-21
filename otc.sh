@@ -1661,6 +1661,8 @@ workspaceDesktopHelp()
 	echo "otc workspace-desktop stop <id>     # stop workspace desktop <id>"
 	echo "otc workspace-desktop reboot <id>   # reboot workspace desktop <id>"
 	echo "otc workspace-desktop reset <id>    # reset workspace desktop <id>"
+	echo "otc workspace-desktop delete <id>   # delete workspace desktop"
+	echo "    --delete-users        true | false        # (default: false)"
 }
 
 workspaceDesktopUserHelp()
@@ -6871,6 +6873,25 @@ resetWorkspaceDesktop()
 	executeWorkspaceDesktopAction "$1" "$REQ_DESKTOP_ACTION"
 }
 
+deleteWorkspaceDesktop()
+{
+	if test -z "$1"; then
+		echo "ERROR: Need to pass desktop ID" 1>&2
+		exit 1
+	fi
+
+	URL="$AUTH_URL_WORKSPACE_DESKTOPS/$1"
+
+	if [ "$DELETE_USERS" = "true" ]; then
+		URL="$URL?delete_users=true"
+	fi
+
+	OUTPUT=`curldeleteauth "$TOKEN" "$URL"`
+	RC=$?
+
+	if test $RC != 0; then echo "ERROR deleting desktop" 1>&2; exit $RC; fi
+}
+
 listWorkspaceDesktopUsers()
 {
 	URL="$AUTH_URL_WORKSPACE_DESKTOP_USERS"
@@ -6992,7 +7013,7 @@ while test "${1:0:2}" == '--'; do
 done
 
 # Specific options
-if [ "${SUBCOM:0:6}" == "create" -o "${SUBCOM:0:5}" == "apply" -o "${SUBCOM:0:6}" == "cancel" -o "$SUBCOM" == "addlistener" -o "${SUBCOM:0:6}" == "update" -o "$SUBCOM" == "register" -o "$SUBCOM" == "download" -o "$SUBCOM" == "copy" -o "$SUBCOM" == "reboot" -o "$SUBCOM" == "start" -o "$SUBCOM" = "stop" ] || [[ "$SUBCOM" == *-instances ]]; then
+if [ "${SUBCOM:0:6}" == "create" -o "${SUBCOM:0:5}" == "apply" -o "${SUBCOM:0:6}" == "delete" -o "${SUBCOM:0:6}" == "cancel" -o "$SUBCOM" == "addlistener" -o "${SUBCOM:0:6}" == "update" -o "$SUBCOM" == "register" -o "$SUBCOM" == "download" -o "$SUBCOM" == "copy" -o "$SUBCOM" == "reboot" -o "$SUBCOM" == "start" -o "$SUBCOM" = "stop" ] || [[ "$SUBCOM" == *-instances ]]; then
 	while [[ $# > 0 ]]; do
 		key="$1"
 		case $key in
@@ -7174,6 +7195,8 @@ if [ "${SUBCOM:0:6}" == "create" -o "${SUBCOM:0:5}" == "apply" -o "${SUBCOM:0:6}
 				ACTIVEDNSIP="$2"; shift;;
 			--access-mode)
 				ACCESSMODE="$2"; shift;;
+			--delete-users)
+				DELETE_USERS="$2"; shift;;
 			--timeout|--elbtimeout)
 				ELBTIMEOUT="$2"; shift;;
 			--cookieto|--cookietimeout)
@@ -8270,6 +8293,8 @@ elif [ "$MAINCOM" == "workspace-desktop" -a "$SUBCOM" == "reboot" ]; then
 	rebootWorkspaceDesktop $1
 elif [ "$MAINCOM" == "workspace-desktop" -a "$SUBCOM" == "reset" ]; then
 	resetWorkspaceDesktop $1
+elif [ "$MAINCOM" == "workspace-desktop" -a "$SUBCOM" == "delete" ]; then
+	deleteWorkspaceDesktop $1
 
 elif [ "$MAINCOM" == "workspace-desktop-user" -a "$SUBCOM" == "help" ]; then
 	workspaceDesktopUserHelp
