@@ -1645,13 +1645,6 @@ workspaceHelp()
 	echo "otc workspace cancel          # cancel workspace"
 }
 
-workspaceJobHelp()
-{
-	echo "--- Workspace Job Management ---"
-	echo "otc workspace-job show <id>         # show status of job <id>"
-	echo "otc workspace-job wait <id> [sec]   # wait for job <id>, poll every sec seconds (default: 2)"
-}
-
 workspaceDesktopHelp()
 {
 	echo "--- Workspace Desktops ---"
@@ -1696,6 +1689,13 @@ workspaceProductHelp()
 {
 	echo "--- Workspace Products ---"
 	echo "otc workspace-product list          # query list of workspace products"
+}
+
+workspaceJobHelp()
+{
+	echo "--- Workspace Job Management ---"
+	echo "otc workspace-job show <id>         # show status of job <id>"
+	echo "otc workspace-job wait <id> [sec]   # wait for job <id>, poll every sec seconds (default: 2)"
 }
 
 mdsHelp()
@@ -1771,13 +1771,13 @@ printHelp()
 	echo
 	workspaceHelp
 	echo
-	workspaceJobHelp
-	echo
 	workspaceDesktopHelp
 	echo
 	workspaceDesktopUserHelp
 	echo
 	workspaceProductHelp
+	echo
+	workspaceJobHelp
 	echo
 	customHelp
 	echo
