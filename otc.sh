@@ -6943,6 +6943,10 @@ createWorkspaceDesktop()
 	fi
 
 	if [ "$IMAGE_ID" != "" ]; then
+		if ! is_uuid "$IMAGE_ID"; then
+		    convertIMAGENameToId "$IMAGE_ID"
+		fi
+
 		IMAGE_ID="\"image_id\": \"$IMAGE_ID\","
 	fi
 
