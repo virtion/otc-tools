@@ -844,6 +844,7 @@ getIAMToken()
 	AUTH_URL_KEYNAMES="$NOVA_URL/os-keypairs"
 
 	AUTH_URL_VPCS="$NEUTRON_URL/v1/$OS_PROJECT_ID/vpcs"
+	AUTH_URL_ROUTE="$NEUTRON_URL/v2.0/vpc/routes"
 	AUTH_URL_ROUTER="$NEUTRON_URL/v2.0/routers"
 	AUTH_URL_PUBLICIPS="$NEUTRON_URL/v1/$OS_PROJECT_ID/publicips"
 	AUTH_URL_SEC_GROUPS="$NEUTRON_URL/v1/$OS_PROJECT_ID/security-groups"
@@ -1172,6 +1173,7 @@ vpcHelp()
 	echo "    --cidr     <cidr>"
 	echo "    --tags KEY=[VAL][,KEY=VAL[,...]]      # add key-value pairs as tags"
 	echo "otc vpc listroutes VPC          # list VPC routes"
+	echo "otc vpc listroutes2 VPC         # list VPC routes (incl. peering routes)"
 	echo "otc vpc addroute VPC DEST NHOP  # add a route to VPC router with dest and nexthop"
 	echo "otc vpc delroute VPC DEST [NHOP]# delete VPC route"
 	echo "otc vpc en/disable-snat VPC     # enable/disable snat"
@@ -2359,6 +2361,16 @@ getVPCRoutes()
 	if ! is_uuid "$1"; then convertVPCNameToId "$1"; else VPCID="$1"; fi
 	if test "$2" == "--via"; then SEP=" via "; fi
 	curlgetauth $TOKEN "$AUTH_URL_ROUTER/$VPCID" | jq -r ".router.routes[] | .destination+\"$SEP\"+.nexthop"
+	return ${PIPESTATUS[0]}
+}
+
+getVPCRoutes2()
+{
+	local SEP="   "
+	if test "$1" == "--via"; then SEP=" via "; shift; fi
+	if ! is_uuid "$1"; then convertVPCNameToId "$1"; else VPCID="$1"; fi
+	if test "$2" == "--via"; then SEP=" via "; fi
+	curlgetauth $TOKEN "$AUTH_URL_ROUTE?vpc_id=$VPCID" | jq -r ".routes[] | .destination+\"$SEP\"+.nexthop+\"$SEP\"+.type"
 	return ${PIPESTATUS[0]}
 }
 
@@ -7701,6 +7713,9 @@ elif [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "create" ]; then
 elif [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "listroutes" ] ||
      [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "route-list" ]; then
 	getVPCRoutes "$@"
+elif [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "listroutes2" ] ||
+     [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "route-list2" ]; then
+	getVPCRoutes2 "$@"
 elif [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "addroute" ] ||
      [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "route-add" ] ||
      [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "route-create" ]; then
