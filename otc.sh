@@ -1175,6 +1175,7 @@ vpcHelp()
 	echo "otc vpc listroutes VPC          # list VPC routes"
 	echo "otc vpc listroutes2 VPC         # list VPC routes (incl. peering routes)"
 	echo "otc vpc addroute VPC DEST NHOP  # add a route to VPC router with dest and nexthop"
+	echo "otc vpc addroute2 VPC DEST NHOP # add a route to VPC router with dest and nexthop"
 	echo "otc vpc delroute VPC DEST [NHOP]# delete VPC route"
 	echo "otc vpc en/disable-snat VPC     # enable/disable snat"
 	echo "otc vpc limits                  # list VPC related quota"
@@ -2386,6 +2387,23 @@ addVPCRoute()
 		\"nexthop\": \"$3\"
 	} ] } }"
 	curlputauth $TOKEN "$ROUTE" "$AUTH_URL_ROUTER/$VPCID" | jq -r '.'
+	return ${PIPESTATUS[0]}
+}
+
+addVPCRoute2()
+{
+	if ! is_uuid "$1"; then convertVPCNameToId "$1"; else VPCID="$1"; fi
+	if test "$2" == "0/0"; then DEST="0.0.0.0/0"; else DEST="$2"; fi
+	if test "$3" == "via"; then shift; fi
+	if test -z "$3"; then echo "ERROR: Need to specify dest and nexthop" 1>&2; exit 2; fi
+	TYPE="peering"	# currently only route type "peering" supported
+	ROUTE="{ \"route\": {
+		\"vpc_id\": \"$VPCID\",
+		\"type\": \"$TYPE\",
+		\"destination\": \"$DEST\",
+		\"nexthop\": \"$3\"
+	} }"
+	curlpostauth $TOKEN "$ROUTE" "$AUTH_URL_ROUTE" | jq -r '.'
 	return ${PIPESTATUS[0]}
 }
 
@@ -7720,6 +7738,10 @@ elif [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "addroute" ] ||
      [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "route-add" ] ||
      [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "route-create" ]; then
 	addVPCRoute "$@"
+elif [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "addroute2" ] ||
+     [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "route-add2" ] ||
+     [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "route-create2" ]; then
+	addVPCRoute2 "$@"
 elif [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "deleteroute" ] ||
      [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "route-delete" ] ||
      [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "route-del" ] ||
