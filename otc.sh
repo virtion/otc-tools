@@ -2097,6 +2097,22 @@ convertEipToId()
 	return 0
 }
 
+convertDesktopNameToId()
+{
+	DESKTOP_ID=`curlgetauth $TOKEN "$AUTH_URL_WORKSPACE_DESKTOPS" | jq -r '.desktops[] | select(.computer_name == "'$1'") | .desktop_id' | tr -d '" ,'; return ${PIPESTATUS[0]}`
+	local RC=$?
+	if test -z "$DESKTOP_ID"; then
+		echo "ERROR: No desktop found by name $1" 1>&2
+		exit 3
+	fi
+	if test "$(echo "$DESKTOP_ID" | wc -w)" != "1"; then
+		DESKTOP_ID=$(echo "$DESKTOP_ID" | head -n1)
+		echo "#Warning: Multiple desktops found by that name; using $DESKTOP_ID" 1>&2
+	fi
+	export DESKTOP_ID
+	return $RC
+}
+
 handleCustom()
 {
 	local RC
@@ -6799,15 +6815,17 @@ queryWorkspaceDesktop()
 		exit 1
 	fi
 
-	ID=$1
+	DESKTOP_ID="$1"
 	JQNAME='.desktop'
 
-	if [ "$ID" = "all" ]; then
-		ID="detail"
+	if [ "$DESKTOP_ID" = "all" ]; then
+		DESKTOP_ID="detail"
 		JQNAME='.desktops[]'
+	elif ! is_uuid "$DESKTOP_ID"; then
+		convertDesktopNameToId "$DESKTOP_ID"
 	fi
 
-	URL="$AUTH_URL_WORKSPACE_DESKTOPS/$ID"
+	URL="$AUTH_URL_WORKSPACE_DESKTOPS/$DESKTOP_ID"
 
 	curlgetauth $TOKEN "$URL" | jq -r $JQNAME' | .desktop_id + "   " + .computer_name + "   " + .status + "   " + .login_status + "   " + .user_name + "   " + .user_group + "   " + .availability_zone + "   " + .product_id + "   \"" + .metadata.desktop_os_version + "\"" + "   " + .created' | sed -r '/^\s*$/d'
 
@@ -6826,9 +6844,14 @@ executeWorkspaceDesktopAction()
 		exit 1
 	fi
 
-	URL="$AUTH_URL_WORKSPACE_DESKTOPS/$1/action"
-
+	DESKTOP_ID="$1"
 	REQ_DESKTOP_ACTION="$2"
+
+	if ! is_uuid "$DESKTOP_ID"; then
+		convertDesktopNameToId "$DESKTOP_ID"
+	fi
+
+	URL="$AUTH_URL_WORKSPACE_DESKTOPS/$DESKTOP_ID/action"
 
 	echo "$REQ_DESKTOP_ACTION"
 
