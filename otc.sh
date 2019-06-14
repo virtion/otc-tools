@@ -1666,7 +1666,9 @@ workspaceDesktopHelp()
 	echo "    --disksize            <size>              # (size in GB)"
 	echo "    --disktype            SATA | SAS | SSD    # (default: SATA)"
 	echo "    --datadisks           <type:size>[,...]   # (like SSD:20)"
+	echo "    --vpc-name            <name>"
 	echo "    --subnet-name         <name>"
+	echo "    --fixed-ip            <IP>"
 	echo "    --az                  <zone>"
 	echo "    --tenancy             shared | dedicated  # (default: shared)"
 	echo "    --dedicated-host      <id or name>"
@@ -6937,10 +6939,20 @@ createWorkspaceDesktop()
 		SECUGROUPIDS="\"security_groups\": [ \"$SECUGROUPIDS\" ],"
 	fi
 
+	if [ "$VPCNAME" != "" ]; then convertVPCNameToId "$VPCNAME"; fi
+	if [ "$SUBNETNAME" != "" ]; then convertSUBNETNameToId "$SUBNETNAME" "$VPCID"; fi
+
 	if [ "$SUBNETID" != "" ]; then
-		NICS="\"nics\": [{
-				\"subnet_id\": \"$SUBNETID\"
-			}],"
+		if [ "$FIXEDIP" != "" ]; then
+			NICS="\"nics\": [{
+					\"subnet_id\": \"$SUBNETID\",
+					\"ip_address\": \"$FIXEDIP\"
+				}],"
+		else
+			NICS="\"nics\": [{
+					\"subnet_id\": \"$SUBNETID\"
+				}],"
+		fi
 	fi
 
 	if test -n "$DATADISKS"; then
