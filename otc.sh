@@ -2656,14 +2656,29 @@ SECGROUPRULECreate()
 	if test -n "$DESCRIPTION"; then
 		DESCJSON="\"description\": \"$DESCRIPTION\","
 	fi
+	if test -n "$DIRECTION"; then
+		DIRECTIONJSON="\"direction\": \"$DIRECTION\","
+	fi
+	if test -n "$PORTMIN"; then
+		PORTMINJSON="\"port_range_min\": \"$PORTMIN\","
+	fi
+	if test -n "$PORTMAX"; then
+		PORTMINJSON="\"port_range_max\": \"$PORTMAX\","
+	fi
+	if test -n "$ETHERTYPE"; then
+		ETHERTYPEJSON="\"ethertype\": \"$ETHERTYPE\","
+	fi
+	if test -n "$PROTOCOL"; then
+		PROTOCOLJSON="\"protocol\": \"$PROTOCOL\","
+	fi
 	local REQ_CREATE_SECGROUPRULE='{
 		"security_group_rule": {
 			'$DESCJSON'
-			"direction":"'"$DIRECTION"'",
-			"port_range_min":"'"$PORTMIN"'",
-			"port_range_max":"'"$PORTMAX"'",
-			"ethertype":"'"$ETHERTYPE"'",
-			"protocol":"'"$PROTOCOL"'",
+			'$DIRECTIONJSON'
+			'$PORTMINJSON'
+			'$PORTMAXJSON'
+			'$ETHERTYPEJSON'
+			'$PROTOCOLJSON'
 			'$REMOTE'
 			"security_group_id":"'"$SECUGROUP"'"
 		}
