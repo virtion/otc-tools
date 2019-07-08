@@ -834,10 +834,10 @@ getIAMToken()
 	if test -z "$CEILOMETER_URL"; then CEILOMETER_URL=${BASEURL/iam/ces}; fi
 
 	AUTH_URL_ECS="$NOVA_URL/servers"
-	export AUTH_URL_ECS_JOB="${NOVA_URL/v2/v1}/jobs"
+	export AUTH_URL_ECS_JOB="${NOVA_URL/v2.1/v1}/jobs"
 	export AUTH_URL_ECS_DETAIL="$NOVA_URL/servers/detail"
 
-	AUTH_URL_ECS_CLOUD="${NOVA_URL/v2/v1}/cloudservers"
+	AUTH_URL_ECS_CLOUD="${NOVA_URL/v2.1/v1}/cloudservers"
 	AUTH_URL_ECS_CLOUD_ACTION="$AUTH_URL_ECS_CLOUD/action"
 	AUTH_URL_ECS_CLOUD_DELETE="$AUTH_URL_ECS_CLOUD/delete"
 	AUTH_URL_FLAVORS="$AUTH_URL_ECS_CLOUD/flavors"
