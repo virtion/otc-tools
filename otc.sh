@@ -1599,6 +1599,7 @@ otcnewHelp()
 	echo "otc cache list          # List distributed cache instances"
 	echo "otc dws list            # List data warehous clusters"
 	echo "otc serverbackup list   # List server backup checkpoints"
+	echo "otc serverbackuppolicy list       # List server backup policies"
 	echo "otc migration list      # List migration tasks"
 }
 
@@ -6625,6 +6626,12 @@ listServerBackups()
 	curlgetauth $TOKEN "$AUTH_URL_CSBS/checkpoint_items" | jq -r '.'
 }
 
+listServerBackupPolicies()
+{
+	# TODO: Translate into list format
+	curlgetauth $TOKEN "$AUTH_URL_CSBS/policies" | jq -r '.'
+}
+
 listVPN()
 {
 	curlgetauth $TOKEN "$NEUTRON_URL/v2.0/vpn/ipsec-site-connections" | jq '.ipsec_site_connections[] | .id+"   "+.name+"   "+.status+"   "+.auth_mode+"   "+.route_mode+"   "+.peer_address+"   "+.ikepolicy_id+"   "+.ipsecpolicy_id' | tr -d '"'
@@ -8481,6 +8488,8 @@ elif [ "$MAINCOM" == "dws"  -a "$SUBCOM" == "list" ]; then
 	listDWS
 elif [ "$MAINCOM" == "serverbackup"  -a "$SUBCOM" == "list" ]; then
 	listServerBackups
+elif [ "$MAINCOM" == "serverbackuppolicy"  -a "$SUBCOM" == "list" ]; then
+	listServerBackupPolicies
 elif [ "$MAINCOM" == "migration"  -a "$SUBCOM" == "list" ]; then
 	listMigrations
 elif [ "$MAINCOM" == "kms"  -a "$SUBCOM" == "list" ]; then
