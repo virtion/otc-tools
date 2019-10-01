@@ -1695,6 +1695,7 @@ workspaceProductHelp()
 {
 	echo "--- Workspace Products ---"
 	echo "otc workspace-product list          # query list of workspace products"
+	echo "    --az                  <zone>"
 }
 
 workspaceJobHelp()
@@ -7138,6 +7139,10 @@ listWorkspaceProducts()
 {
 	URL="$AUTH_URL_WORKSPACE_PRODUCTS"
 
+	if [ "$AZ" != "" ]; then
+		URL="$URL?availability_zone=$AZ"
+	fi
+
 	curlgetauth $TOKEN "$URL" | jq -r '.products[] | .product_id + "   " + .flavor_id + "   " + .type + "   " + .os_type + "   " + .descriptions' | sed -r '/^\s*$/d'
 
 	return ${PIPESTATUS[0]}
@@ -7246,7 +7251,7 @@ while test "${1:0:2}" == '--'; do
 done
 
 # Specific options
-if [ "${SUBCOM:0:6}" == "create" -o "${SUBCOM:0:5}" == "apply" -o "${SUBCOM:0:6}" == "delete" -o "${SUBCOM:0:6}" == "cancel" -o "$SUBCOM" == "addlistener" -o "${SUBCOM:0:6}" == "update" -o "$SUBCOM" == "register" -o "$SUBCOM" == "download" -o "$SUBCOM" == "copy" -o "$SUBCOM" == "reboot" -o "$SUBCOM" == "start" -o "$SUBCOM" = "stop" ] || [[ "$SUBCOM" == *-instances ]]; then
+if [ "${SUBCOM:0:6}" == "create" -o "${SUBCOM:0:5}" == "apply" -o "${SUBCOM:0:6}" == "delete" -o "${SUBCOM:0:6}" == "cancel" -o "$SUBCOM" == "addlistener" -o "${SUBCOM:0:6}" == "update" -o "$SUBCOM" == "register" -o "$SUBCOM" == "download" -o "$SUBCOM" == "copy" -o "$SUBCOM" == "reboot" -o "$SUBCOM" == "start" -o "$SUBCOM" = "stop" -o "$SUBCOM" = "list" ] || [[ "$SUBCOM" == *-instances ]]; then
 	while [[ $# > 0 ]]; do
 		key="$1"
 		case $key in
