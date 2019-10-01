@@ -4405,7 +4405,7 @@ ECSAttachVolumeListName()
 		if [ $AZ == ${volume_az//\"/} ]; then
 			ECSAttachVolumeName "$ecs" $dev_vol
 		else
-			echo "WARN: availablity zone of ECS ${ecs} does not correspond to availabilty zone of volume ${dev_vol}, NOT ATTACHING"
+			echo "WARN: availability zone of ECS ${ecs} does not correspond to availabilty zone of volume ${dev_vol}, NOT ATTACHING"
 		fi
 	done
 }
@@ -4446,7 +4446,7 @@ ECSDetachVolumeListName()
 	for dev_vol in $(echo $DEV_VOL | sed 's/,/ /g'); do
 		volume_az=$(getEVSDetail ${dev_vol#*:} | jq .availability_zone)
 		#if [ $AZ != ${volume_az//\"/} ]; then
-		#	echo "#Warning: availablity zone of ECS ${ecs} does not correspond to availabilty zone of volume ${dev_vol}, NOT DETACHING" 1>&2
+		#	echo "#Warning: availability zone of ECS ${ecs} does not correspond to availabilty zone of volume ${dev_vol}, NOT DETACHING" 1>&2
 		#fi
 		ECSDetachVolumeName "$ecs" $dev_vol
 	done
@@ -4905,7 +4905,7 @@ ECSCreatev2()
 
 	local REQ_CREATE_VM="{
 	\"server\": {
-		\"availablity_zone\": \"$AZ\",
+		\"availability_zone\": \"$AZ\",
 		\"name\": \"$INSTANCE_NAME\",
 		\"flavorRef\": \"$INSTANCE_TYPE\",
 		$DISKMAPPING
@@ -6780,7 +6780,7 @@ applyWorkspace_getLiteAD()
 			}
 		],
 		\"access_mode\": \"$ACCESSMODE\",
-		\"availablity_zone\": \"$AZ\"
+		\"availability_zone\": \"$AZ\"
 	}"
 
 	export REQ_CREATE_WORKSPACE
@@ -6805,7 +6805,7 @@ applyWorkspace_getLocalAD()
 			}
 		],
 		\"access_mode\": \"$ACCESSMODE\",
-		\"availablity_zone\": \"$AZ\"
+		\"availability_zone\": \"$AZ\"
 	}"
 
 	export REQ_CREATE_WORKSPACE
@@ -7046,7 +7046,7 @@ createWorkspaceDesktop()
 	fi
 
 	if [ "$AZ" != "" ]; then
-		AZ="\"availablity_zone\": \"$AZ\","
+		AZ="\"availability_zone\": \"$AZ\","
 	fi
 
 	if [ "$USER_GROUP" != "" ]; then
