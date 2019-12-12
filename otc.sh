@@ -850,6 +850,9 @@ getIAMToken()
 	AUTH_URL_SEC_GROUPS="$NEUTRON_URL/v1/$OS_PROJECT_ID/security-groups"
 	#AUTH_URL_SEC_GROUP_RULES="$NEUTRON_URL/v2/$OS_PROJECT_ID/security-group-rules"
 	AUTH_URL_SEC_GROUP_RULES="$NEUTRON_URL/v2.0/security-group-rules"
+	AUTH_URL_FW_GROUPS="$NEUTRON_URL/v2.0/fwaas/firewall_groups"
+	AUTH_URL_FW_POLICIES="$NEUTRON_URL/v2.0/fwaas/firewall_policies"
+	AUTH_URL_FW_RULES="$NEUTRON_URL/v2.0/fwaas/firewall_rules"
 	AUTH_URL_SUBNETS="$NEUTRON_URL/v1/$OS_PROJECT_ID/subnets"
 
 	AUTH_URL_IMAGES="$GLANCE_URL/v2/images"
@@ -1250,6 +1253,49 @@ sgHelp()
 	echo "    --remotegroup         <ID/name of remote security group>"
 	echo "    --remoteip            <CIDR of remote IP>"
 	echo "    --description         <desc>          # optional description"
+}
+
+firewallHelp()
+{
+	echo "--- Firewalls ---"
+	echo "otc firewall list                         # list all firewalls"
+	echo "otc firewall show <id>|all                # show details of firewall <id>"
+	echo "otc firewall create                       # create firewall"
+	echo "    --name        <name>"
+	echo "    --description <description>"
+	echo "otc firewall associate                    # associate subnet"
+	echo "    --firewall-name <firewall name>"
+	echo "    --subnet-name   <subnet name>"
+	echo "otc firewall delete <id>                  # delete firewall"
+}
+
+firewallPolicyHelp()
+{
+	echo "--- Firewall Policies ---"
+	echo "otc firewall-policy list                  # list all firewall policies"
+	echo "otc firewall-policy show <id>|all         # show details of firewall policy <id>"
+	echo "otc firewall-policy create                # create firewall policy"
+	echo "    --name <name>"
+	echo "    --description <description>"
+	echo "otc firewall-policy delete <id>           # delete firewall policy"
+}
+
+firewallRuleHelp()
+{
+	echo "--- Firewall Rules ---"
+	echo "otc firewall-rule list                    # list all firewall rules"
+	echo "otc firewall-rule show <id>|all           # show details of firewall rule <id>"
+	echo "otc firewall-rule create                  # create firewall rule"
+	echo "    --firewall-name    <firewall name>"
+	echo "    --type             INBOUND|OUTBOUND"
+	echo "    --action           ALLOW|DENY"
+	echo "    --protocol         TCP|UDP|ICMP|ALL"
+	echo "    --source-ip        <IP>"
+	echo "    --source-port      <PORT>"
+	echo "    --destination-ip   <IP>"
+	echo "    --destination-port <PORT>"
+	echo "    --description      <description>"
+	echo "otc firewall-rule delete <id>             # delete firewall rule"
 }
 
 imageHelp()
@@ -1746,6 +1792,12 @@ printHelp()
 	echo
 	sgHelp
 	echo
+	firewallHelp
+	echo
+	firewallPolicyHelp
+	echo
+	firewallRuleHelp
+	echo
 	imageHelp
 	echo
 	elbHelp
@@ -1962,6 +2014,22 @@ convertSECUGROUPNameToId()
 		SECUGROUP=`echo "$SECUGROUP" | head -n 1`
 	fi
 	export SECUGROUP
+	return $RC
+}
+
+convertFirewallNameToId()
+{
+	FIREWALLID=`curlgetauth $TOKEN "$AUTH_URL_FW_GROUPS" | jq -r '.firewall_groups[] | select(.name == "'$1'") | .id' | tr -d '" ,'; return ${PIPESTATUS[0]}`
+	local RC=$?
+	if test -z "$FIREWALLID"; then
+		echo "ERROR: No firewall found by name '$1'" 1>&2
+		exit 3
+	fi
+	if test "$(echo "$FIREWALLID" | wc -w)" != "1"; then
+		FIREWALLID=$(echo "$FIREWALLID" | head -n1)
+		echo "#Warning: Multiple firewalls found by that name; using '$FIREWALLID'" 1>&2
+	fi
+	export FIREWALLID
 	return $RC
 }
 
@@ -6642,6 +6710,393 @@ listVPN()
 listFWRules()
 {
 	curlgetauth $TOKEN "$NEUTRON_URL/v2.0/fwaas/firewall_rules" | jq -r '.'
+
+	return ${PIPESTATUS[0]}
+}
+
+listFirewalls()
+{
+	curlgetauth $TOKEN "$AUTH_URL_FW_GROUPS" | jq -r '.firewall_groups[] | .id + "   " + .name + "   " + .status + "   " + .description'
+
+	return ${PIPESTATUS[0]}
+}
+
+showFirewall()
+{
+	if test -z "$1"; then
+		echo "ERROR: Need to pass firewall ID or 'all'" 1>&2
+		exit 1
+	fi
+
+	FIREWALLID=$1
+	if [ "$FIREWALLID" = "all" ]; then
+		FIREWALLID_PARAM=""
+	elif ! is_uuid "$FIREWALLID"; then
+		convertFirewallNameToId "$FIREWALLID"
+		FIREWALLID_PARAM="/$FIREWALLID"
+	fi
+
+	curlgetauth $TOKEN "$AUTH_URL_FW_GROUPS$FIREWALLID_PARAM" | jq -r '.'
+
+	return ${PIPESTATUS[0]}
+}
+
+createFirewall()
+{
+	# create inbound firewall policy
+
+	REQ_CREATE_FW_POLICY="
+	{
+		\"firewall_policy\": {
+			\"name\": \"ingress_firewall_policy\"
+		}
+	}"
+
+	echo "$REQ_CREATE_FW_POLICY"
+
+	OUTPUT=$(curlpostauth "$TOKEN" "$REQ_CREATE_FW_POLICY" "$AUTH_URL_FW_POLICIES")
+	RC=$?
+
+	if [ $RC != 0 ]; then
+		echo -e "ERROR: Creating inbound firewall policy failed!" 1>&2;
+		exit $RC;
+	fi
+
+	FW_INBOUND_POLICY_ID=$(echo "$OUTPUT" | jq '.[] | .id' | tr -d '"')
+
+	echo "$OUTPUT" | jq '.[]'
+	# echo "=> FW_INBOUND_POLICY_ID = '$FW_INBOUND_POLICY_ID'"
+
+	# create outbound firewall policy
+
+	REQ_CREATE_FW_POLICY="
+	{
+		\"firewall_policy\": {
+			\"name\": \"egress_firewall_policy\"
+		}
+	}"
+
+	echo "$REQ_CREATE_FW_POLICY"
+
+	OUTPUT=$(curlpostauth "$TOKEN" "$REQ_CREATE_FW_POLICY" "$AUTH_URL_FW_POLICIES")
+	RC=$?
+
+	if [ $RC != 0 ]; then
+		echo -e "ERROR: Creating outbound firewall policy failed!" 1>&2;
+		exit $RC;
+	fi
+
+	FW_OUTBOUND_POLICY_ID=$(echo "$OUTPUT" | jq '.[] | .id' | tr -d '"')
+
+	echo "$OUTPUT" | jq '.[]'
+	# echo "=> FW_OUTBOUND_POLICY_ID = '$FW_OUTBOUND_POLICY_ID'"
+
+	# create firewall group
+
+	if [ "$NAME" != "" ]; then
+		NAME="\"name\": \"$NAME\","
+	fi
+
+	if [ "$DESCRIPTION" != "" ]; then
+		DESCRIPTION="\"description\": \"$DESCRIPTION\","
+	fi
+
+	REQ_CREATE_FW_GROUP="
+	{
+		\"firewall_group\": {
+			$NAME
+			$DESCRIPTION
+			\"ingress_firewall_policy_id\": \"$FW_INBOUND_POLICY_ID\",
+			\"egress_firewall_policy_id\": \"$FW_OUTBOUND_POLICY_ID\"
+		}
+	}"
+
+	echo "$REQ_CREATE_FW_GROUP"
+
+	OUTPUT=`curlpostauth "$TOKEN" "$REQ_CREATE_FW_GROUP" "$AUTH_URL_FW_GROUPS"`
+	RC=$?
+
+	if test $RC != 0; then echo "ERROR creating firewall!" 1>&2; exit $RC; fi
+
+	echo "$OUTPUT" | jq '.[]'
+
+	return ${PIPESTATUS[0]}
+}
+
+associateFirewallSubnet()
+{
+	if [ "$FIREWALLNAME" = "" ]; then
+		echo -e "ERROR: Missing parameter '--firewall-name'!" 1>&2;
+		exit $RC;
+	fi
+
+	if [ "$SUBNETNAME" = "" ]; then
+		echo -e "ERROR: Missing parameter '--subnet-name'!" 1>&2;
+		exit $RC;
+	fi
+
+	convertFirewallNameToId "$FIREWALLNAME"
+	convertSUBNETNameToId "$SUBNETNAME" "$VPCID"
+
+	VPC_ID=$(curlgetauth $TOKEN "$AUTH_URL_SUBNETS/$SUBNETID" | jq '.[] | .vpc_id' | tr -d '"')
+	RC=$?
+
+	if [ $RC != 0 -o "$VPC_ID" = "" ]; then
+		echo -e "ERROR: Cannot get VPC ID of subnet '$SUBNETNAME'!" 1>&2;
+		exit $RC;
+	fi
+
+	# echo "VPC_ID == '$VPC_ID'"
+
+	PORT_ID=$(curlgetauth $TOKEN $NEUTRON_URL/v2.0/ports?device_id=$VPC_ID | jq '.ports[] | .id' | tr -d '"')
+	RC=$?
+
+	if [ $RC != 0 -o "$PORT_ID" = "" ]; then
+		echo -e "ERROR: Cannot get port ID of VPC '$VPC_ID'!" 1>&2;
+		exit $RC;
+	fi
+
+	# echo "PORT_ID == '$PORT_ID'"
+
+	REQ_CREATE_FW_GROUP="
+	{
+		\"firewall_group\": {
+			\"ports\": [ \"$PORT_ID\" ]
+		}
+	}"
+
+	echo "$REQ_CREATE_FW_GROUP"
+
+	OUTPUT=`curlputauth "$TOKEN" "$REQ_CREATE_FW_GROUP" "$AUTH_URL_FW_GROUPS/$FIREWALLID"`
+	RC=$?
+
+	if test $RC != 0; then echo "ERROR updating firewall" 1>&2; exit $RC; fi
+
+	echo "$OUTPUT" | jq '.[]'
+
+	return ${PIPESTATUS[0]}
+}
+
+deleteFirewall()
+{
+	if test -z "$1"; then
+		echo "ERROR: Need to pass firewall ID" 1>&2
+		exit 1
+	fi
+
+	FIREWALLID=$1
+	if ! is_uuid "$FIREWALLID"; then
+		convertFirewallNameToId "$FIREWALLID"
+	fi
+
+	curldeleteauth $TOKEN "$AUTH_URL_FW_GROUPS/$FIREWALLID" | jq -r '.'
+
+	return ${PIPESTATUS[0]}
+}
+
+listFirewallPolicies()
+{
+	curlgetauth $TOKEN "$AUTH_URL_FW_POLICIES" | jq -r '.firewall_policies[] | .id + "   " + .name'
+
+	return ${PIPESTATUS[0]}
+}
+
+showFirewallPolicy()
+{
+	if test -z "$1"; then
+		echo "ERROR: Need to pass firewall policy ID or 'all'" 1>&2
+		exit 1
+	fi
+
+	FW_POLICY_ID=$1
+	if [ "$FW_POLICY_ID" = "all" ]; then
+		FW_POLICY_ID_PARAM=""
+	else
+		FW_POLICY_ID_PARAM="/$FW_POLICY_ID"
+	fi
+
+	curlgetauth $TOKEN "$AUTH_URL_FW_POLICIES$FW_POLICY_ID_PARAM" | jq -r '.'
+
+	return ${PIPESTATUS[0]}
+}
+
+createFirewallPolicy()
+{
+	if [ "$NAME" != "" ]; then
+		NAME="\"name\": \"$NAME\","
+	fi
+
+	if [ "$DESCRIPTION" != "" ]; then
+		DESCRIPTION="\"description\": \"$DESCRIPTION\","
+	fi
+
+	REQ_CREATE_FW_POLICY="
+	{
+		\"firewall_policy\": {
+			$NAME
+			$DESCRIPTION
+			\"audited\": false,
+			\"public\": false
+		}
+	}"
+
+	echo "$REQ_CREATE_FW_POLICY"
+
+	curlpostauth "$TOKEN" "$REQ_CREATE_FW_POLICY" "$AUTH_URL_FW_POLICIES" | jq -r '.'
+
+	return ${PIPESTATUS[0]}
+}
+
+deleteFirewallPolicy()
+{
+	if test -z "$1"; then
+		echo "ERROR: Need to pass firewall policy ID" 1>&2
+		exit 1
+	fi
+
+	curldeleteauth $TOKEN "$AUTH_URL_FW_POLICIES/$1" | jq -r '.'
+
+	return ${PIPESTATUS[0]}
+}
+
+listFirewallRules()
+{
+	curlgetauth $TOKEN "$AUTH_URL_FW_RULES" | sed -e 's/"enabled":true/"enabled":"enabled"/g' | sed -e 's/"enabled":false/"enabled":"disabled"/g' | sed -e 's/"protocol":null/"protocol":"all"/g' | sed -e 's%_address":null%_address":"0.0.0.0/0"%g' | sed -e 's/_port":null/_port":"all"/g' | jq -r '.firewall_rules[] | .id + "   " + (.enabled|tostring) + "   " + .action + "   " + .protocol + "   " + .source_ip_address + "   " + .source_port + "   " + .destination_ip_address + "   " + .destination_port + "   " + .description'
+
+	return ${PIPESTATUS[0]}
+}
+
+showFirewallRule()
+{
+	if test -z "$1"; then
+		echo "ERROR: Need to pass firewall rule ID or 'all'" 1>&2
+		exit 1
+	fi
+
+	FW_RULE_ID=$1
+	if [ "$FW_RULE_ID" = "all" ]; then
+		FW_RULE_ID_PARAM=""
+	else
+		FW_RULE_ID_PARAM="/$FW_RULE_ID"
+	fi
+
+	curlgetauth $TOKEN "$AUTH_URL_FW_RULES$FW_RULE_ID_PARAM" | jq -r '.'
+
+	return ${PIPESTATUS[0]}
+}
+
+createFirewallRule()
+{
+	if [ "$FIREWALLNAME" = "" ]; then
+		echo -e "ERROR: Missing parameter '--firewall-name'!" 1>&2;
+		exit $RC;
+	fi
+
+	convertFirewallNameToId "$FIREWALLNAME"
+
+	if [ "$TYPE" = "INBOUND" ]; then
+		FIELD="ingress_firewall_policy_id"
+	elif [ "$TYPE" = "OUTBOUND" ]; then
+		FIELD="egress_firewall_policy_id"
+	else
+		echo -e "ERROR: '--type' must be 'INBOUND' or 'OUTBOUND'!" 1>&2;
+		exit $RC;
+	fi
+
+	# get selected firewall policy
+
+	FW_POLICY_ID=$(curlgetauth $TOKEN "$AUTH_URL_FW_GROUPS/$FIREWALLID" | jq '.[] | .'$FIELD | tr -d '"')
+	RC=$?
+
+	if [ $RC != 0 -o "$FW_POLICY_ID" = "" ]; then
+		echo -e "ERROR: Cannot get policy ID for '$TYPE' rules!" 1>&2;
+		exit $RC;
+	fi
+
+	# echo "FW_POLICY_ID == '$FW_POLICY_ID'"
+
+	if [ "$ACTION" != "" ]; then
+		ACTION="\"action\": \"$ACTION\","
+	fi
+
+	if [ "$PROTOCOL" != "" -a "$PROTOCOL" != "ALL" ]; then
+		PROTOCOL="\"protocol\": \"$PROTOCOL\","
+	fi
+
+	if [ "$SOURCE_IP" != "" ]; then
+		SOURCE_IP="\"source_ip_address\": \"$SOURCE_IP\","
+	fi
+
+	if [ "$SOURCE_PORT" != "" ]; then
+		SOURCE_PORT="\"source_port\": \"$SOURCE_PORT\","
+	fi
+
+	if [ "$DESTINATION_IP" != "" ]; then
+		DESTINATION_IP="\"destination_ip_address\": \"$DESTINATION_IP\","
+	fi
+
+	if [ "$DESTINATION_PORT" != "" ]; then
+		DESTINATION_PORT="\"destination_port\": \"$DESTINATION_PORT\","
+	fi
+
+	if [ "$DESCRIPTION" != "" ]; then
+		DESCRIPTION="\"description\": \"$DESCRIPTION\","
+	fi
+
+	# create firewall rule
+
+	REQ_CREATE_FW_RULE="
+	{
+		\"firewall_rule\": {
+			$ACTION
+			$PROTOCOL
+			$SOURCE_IP
+			$SOURCE_PORT
+			$DESTINATION_IP
+			$DESTINATION_PORT
+			$DESCRIPTION
+			\"enabled\": true
+		}
+	}"
+
+	echo "$REQ_CREATE_FW_RULE"
+
+	OUTPUT=$(curlpostauth "$TOKEN" "$REQ_CREATE_FW_RULE" "$AUTH_URL_FW_RULES")
+	RC=$?
+
+	if [ $RC != 0 ]; then
+		echo -e "ERROR: Creating firewall rule failed!" 1>&2;
+		exit $RC;
+	fi
+
+	FW_RULE_ID=$(echo "$OUTPUT" | jq '.[] | .id' | tr -d '"')
+
+	echo "$OUTPUT" | jq '.[]'
+	# echo "=> FW_RULE_ID = '$FW_RULE_ID'"
+
+	# insert firewall rule into policy
+
+	REQ_INSERT_FW_RULE="
+	{
+		\"firewall_rule_id\": \"$FW_RULE_ID\"
+	}"
+
+	echo "$REQ_INSERT_FW_RULE"
+
+	curlputauth "$TOKEN" "$REQ_INSERT_FW_RULE" "$AUTH_URL_FW_POLICIES/$FW_POLICY_ID/insert_rule" | jq -r '.'
+
+	return ${PIPESTATUS[0]}
+}
+
+deleteFirewallRule()
+{
+	if test -z "$1"; then
+		echo "ERROR: Need to pass firewall rule ID" 1>&2
+		exit 1
+	fi
+
+	curldeleteauth $TOKEN "$AUTH_URL_FW_RULES/$1" | jq -r '.'
+
 	return ${PIPESTATUS[0]}
 }
 
@@ -7251,7 +7706,7 @@ while test "${1:0:2}" == '--'; do
 done
 
 # Specific options
-if [ "${SUBCOM:0:6}" == "create" -o "${SUBCOM:0:5}" == "apply" -o "${SUBCOM:0:6}" == "delete" -o "${SUBCOM:0:6}" == "cancel" -o "$SUBCOM" == "addlistener" -o "${SUBCOM:0:6}" == "update" -o "$SUBCOM" == "register" -o "$SUBCOM" == "download" -o "$SUBCOM" == "copy" -o "$SUBCOM" == "reboot" -o "$SUBCOM" == "start" -o "$SUBCOM" = "stop" -o "$SUBCOM" = "list" ] || [[ "$SUBCOM" == *-instances ]]; then
+if [ "${SUBCOM:0:6}" == "create" -o "${SUBCOM:0:5}" == "apply" -o "${SUBCOM:0:9}" == "associate" -o "${SUBCOM:0:6}" == "delete" -o "${SUBCOM:0:6}" == "cancel" -o "$SUBCOM" == "addlistener" -o "${SUBCOM:0:6}" == "update" -o "$SUBCOM" == "register" -o "$SUBCOM" == "download" -o "$SUBCOM" == "copy" -o "$SUBCOM" == "reboot" -o "$SUBCOM" == "start" -o "$SUBCOM" = "stop" -o "$SUBCOM" = "list" ] || [[ "$SUBCOM" == *-instances ]]; then
 	while [[ $# > 0 ]]; do
 		key="$1"
 		case $key in
@@ -7300,6 +7755,18 @@ if [ "${SUBCOM:0:6}" == "create" -o "${SUBCOM:0:5}" == "apply" -o "${SUBCOM:0:6}
 				SUBNETID="$2"; shift;;
 			--subnet-name)
 				SUBNETNAME="$2"; shift;;
+			--firewall-name)
+				FIREWALLNAME="$2"; shift;;
+			--action)
+				ACTION="$2"; shift;;
+			--source-ip)
+				SOURCE_IP="$2"; shift;;
+			--source-port)
+				SOURCE_PORT="$2"; shift;;
+			--destination-ip)
+				DESTINATION_IP="$2"; shift;;
+			--destination-port)
+				DESTINATION_PORT="$2"; shift;;
 			--nicsubs)
 				MORESUBNETS="$2"; shift;;
 			--type)
@@ -7885,6 +8352,41 @@ elif [ "$MAINCOM" == "security-group-rules"  -a "$SUBCOM" == "create" ]; then
 	SECGROUPRULECreate
 elif [ "$MAINCOM" == "security-group"  -a "$SUBCOM" == "delete" ]; then
 	SECGROUPDelete "$@"
+
+elif [ "$MAINCOM" == "firewall" -a "$SUBCOM" == "help" ]; then
+	firewallHelp
+elif [ "$MAINCOM" == "firewall" -a "$SUBCOM" == "list" ]; then
+	listFirewalls
+elif [ "$MAINCOM" == "firewall" -a "$SUBCOM" == "show" ]; then
+	showFirewall $1
+elif [ "$MAINCOM" == "firewall" -a "$SUBCOM" == "create" ]; then
+	createFirewall
+elif [ "$MAINCOM" == "firewall" -a "$SUBCOM" == "associate" ]; then
+	associateFirewallSubnet
+elif [ "$MAINCOM" == "firewall" -a "$SUBCOM" == "delete" ]; then
+	deleteFirewall $1
+
+elif [ "$MAINCOM" == "firewall-policy" -a "$SUBCOM" == "help" ]; then
+	firewallPolicyHelp
+elif [ "$MAINCOM" == "firewall-policy" -a "$SUBCOM" == "list" ]; then
+	listFirewallPolicies
+elif [ "$MAINCOM" == "firewall-policy" -a "$SUBCOM" == "show" ]; then
+	showFirewallPolicy $1
+elif [ "$MAINCOM" == "firewall-policy" -a "$SUBCOM" == "create" ]; then
+	createFirewallPolicy
+elif [ "$MAINCOM" == "firewall-policy" -a "$SUBCOM" == "delete" ]; then
+	deleteFirewallPolicy $1
+
+elif [ "$MAINCOM" == "firewall-rule" -a "$SUBCOM" == "help" ]; then
+	firewallRuleHelp
+elif [ "$MAINCOM" == "firewall-rule" -a "$SUBCOM" == "list" ]; then
+	listFirewallRules
+elif [ "$MAINCOM" == "firewall-rule" -a "$SUBCOM" == "show" ]; then
+	showFirewallRule $1
+elif [ "$MAINCOM" == "firewall-rule" -a "$SUBCOM" == "create" ]; then
+	createFirewallRule
+elif [ "$MAINCOM" == "firewall-rule" -a "$SUBCOM" == "delete" ]; then
+	deleteFirewallRule $1
 
 elif [ "$MAINCOM" == "images" -a "$SUBCOM" == "help" ]; then
 	imageHelp
