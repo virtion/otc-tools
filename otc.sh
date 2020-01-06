@@ -1165,6 +1165,16 @@ backupHelp()
 	echo "otc backuppolicy listtasks ID          # show jobs triggered by policy (list)"
 }
 
+serverbackupHelp()
+{
+	echo "--- Cloud Server Backup Service ---"
+	echo "otc serverbackup list [FILTERS]        # list all server backups (opt. key=value filters)"
+	echo "otc serverbackup show NAME|ID          # show server backup"
+	echo ""
+	echo "otc serverbackuppolicy list            # list server backup policies"
+	echo "otc serverbackuppolicy show NAME|ID    # show server backup policy"
+}
+
 vpcHelp()
 {
 	echo "--- Virtual Private Network (VPC) Router ---"
@@ -1644,8 +1654,6 @@ otcnewHelp()
 	echo "otc shares list         # List shared filesystems"
 	echo "otc cache list          # List distributed cache instances"
 	echo "otc dws list            # List data warehous clusters"
-	echo "otc serverbackup list   # List server backup checkpoints"
-	echo "otc serverbackuppolicy list       # List server backup policies"
 	echo "otc migration list      # List migration tasks"
 }
 
@@ -1781,8 +1789,10 @@ printHelp()
 	keypairHelp
 	echo
 	evsHelp
-	#echo
+	echo
 	backupHelp
+	echo
+	serverbackupHelp
 	echo
 	vpcHelp
 	echo
@@ -6689,16 +6699,49 @@ listDWS()
 	curlgetauth $TOKEN "$AUTH_URL_DWS/clusters" | jq -r '.'
 }
 
-listServerBackups()
+getServerBackupList()
 {
-	# TODO: Translate into list format
-	curlgetauth $TOKEN "$AUTH_URL_CSBS/checkpoint_items" | jq -r '.'
+	FILTER=$(concatarr "&" "$@")
+	FILTER="${FILTER// /%20}"
+
+	if test -z "$PARAMSTRING" -a -n "$FILTER"; then
+		FILTER="?${FILTER:1}"
+	fi
+
+	curlgetauth $TOKEN "$AUTH_URL_CSBS/checkpoint_items$PARAMSTRING$FILTER" | jq 'def str(v): v|tostring; .checkpoint_items[] | .id + "   " + .name + "   " + .extend_info.resource_name + "   " + .status + "   " + "   " + str(.extend_info.size) + "   " + .extend_info.resource_az + "   " + .updated_at ' | tr -d '"' | sed 's/\(T[0-9:]*\)\.[0-9]*$/\1/'
+
+	return ${PIPESTATUS[0]}
 }
 
-listServerBackupPolicies()
+getServerBackupDetail()
 {
-	# TODO: Translate into list format
-	curlgetauth $TOKEN "$AUTH_URL_CSBS/policies" | jq -r '.'
+	local filter
+	if test -n "$1"; then
+		if ! is_uuid "$1"; then filter="| select(.name == \"$1\")"; else filter="| select(.id == \"$1\")"; fi
+	fi
+
+	curlgetauth $TOKEN "$AUTH_URL_CSBS/checkpoint_items" | jq ".checkpoint_items[] $filter"
+
+	return ${PIPESTATUS[0]}
+}
+
+getServerBackupPolicyList()
+{
+	curlgetauth $TOKEN "$AUTH_URL_CSBS/policies" | jq 'def str(v): v|tostring; def onoff(v): if v then "ON" else "OFF" end; .policies[] | .id + "   " + .name + "   " + onoff(.scheduled_operations[].enabled) + "   " + str(.resources | length) + "   " + .scheduled_operations[].trigger.properties.pattern + "   " + str(.scheduled_operations[].operation_definition.max_backups) + "   " + str(.scheduled_operations[].operation_definition.retention_duration_days)' | tr -d '"' | sed -e "s/   [^ ]*FREQ=\([A-Z]*\).*INTERVAL=\([0-9]*\).*BYHOUR=\([0-9]*\).*BYMINUTE=\([0-9]*\)[^ ]*   /   \3\:\4   \1   \2   /" | sed -e "s/\([A-Z]*\);BYHOUR=..;BYMINUTE=00[^;]*FREQ=WEEKLY;BYDAY=/\1,/g" | sed -e "s/   [^ ]*FREQ=\([A-Z]*\).*BYDAY=\([A-Z,]*\).*BYHOUR=\([0-9]*\).*BYMINUTE=\([0-9]*\)[^ ]*   /   \3\:\4   \1   \2   /"
+
+	return ${PIPESTATUS[0]}
+}
+
+getServerBackupPolicyDetail()
+{
+	local filter
+	if test -n "$1"; then
+		if ! is_uuid "$1"; then filter="| select(.name == \"$1\")"; else filter="| select(.id == \"$1\")"; fi
+	fi
+
+	curlgetauth $TOKEN "$AUTH_URL_CSBS/policies" | jq ".policies[] $filter"
+
+	return ${PIPESTATUS[0]}
 }
 
 listVPN()
@@ -8994,9 +9037,13 @@ elif [ "$MAINCOM" == "cache"  -a "$SUBCOM" == "azs" ]; then
 elif [ "$MAINCOM" == "dws"  -a "$SUBCOM" == "list" ]; then
 	listDWS
 elif [ "$MAINCOM" == "serverbackup"  -a "$SUBCOM" == "list" ]; then
-	listServerBackups
+	getServerBackupList "$@"
+elif [ "$MAINCOM" == "serverbackup"  -a "$SUBCOM" == "show" ]; then
+	getServerBackupDetail "$1"
 elif [ "$MAINCOM" == "serverbackuppolicy"  -a "$SUBCOM" == "list" ]; then
-	listServerBackupPolicies
+	getServerBackupPolicyList
+elif [ "$MAINCOM" == "serverbackuppolicy"  -a "$SUBCOM" == "show" ]; then
+	getServerBackupPolicyDetail "$1"
 elif [ "$MAINCOM" == "migration"  -a "$SUBCOM" == "list" ]; then
 	listMigrations
 elif [ "$MAINCOM" == "kms"  -a "$SUBCOM" == "list" ]; then
