@@ -2898,7 +2898,7 @@ createBackupPolicy()
 {
 	local NAME="$1"; shift
 	# Optional pos params (convenience)
-	if test -z "$BKUPTIME" -a -n "$1"; then if "$1" == "--time"; then shift; fi; BKUPTIME="$1";
+	if test -z "$BKUPTIME" -a -n "$1"; then if test "$1" == "--time"; then shift; fi; BKUPTIME="$1";
 		if test -z "$BKUPFREQ" -a -n "$2"; then if test "$2" == "--freq"; then shift; fi; BKUPFREQ=$2;
 			if test -z "$BKUPRETAIN" -a -n "$3"; then if test "$3" == "--retain"; then shift; fi; BKUPRETAIN=$3; fi
 		fi
