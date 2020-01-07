@@ -2951,7 +2951,7 @@ addVolsToPolicy()
 		if ! is_uuid "$vol"; then echo "WARN: No such volume $oldvol" 1>&2; fi
 		RSRC="$RSRC, { \"resource_id\": \"$vol\", \"resource_type\": \"volume\" }"
 	done
-	if test -z "$RSRC"; then echo "ERROR: Need to list volume IDs to be added to BackupPolicy" 1>&2; exit2; fi
+	if test -z "$RSRC"; then echo "ERROR: Need to list volume IDs to be added to BackupPolicy" 1>&2; exit 2; fi
 	RSRC="\"resources\": [ ${RSRC#,} ]"
 	curlpostauth $TOKEN "{ \"backup_policy_id\": \"$BACKPOL_ID\", $RSRC }" "${AUTH_URL_CBACKUPPOLS}resources" | jq -r '.'
 	return ${PIPESTATUS[0]}
@@ -2967,7 +2967,7 @@ rmvVolsFromPolicy()
 		if ! is_uuid "$vol"; then echo "WARN: No such volume $oldvol" 1>&2; fi
 		RSRC="$RSRC, { \"resource_id\": \"$vol\" }"
 	done
-	if test -z "$RSRC"; then echo "ERROR: Need to list volume IDs to be removed from BackupPolicy" 1>&2; exit2; fi
+	if test -z "$RSRC"; then echo "ERROR: Need to list volume IDs to be removed from BackupPolicy" 1>&2; exit 2; fi
 	RSRC="\"resources\": [ ${RSRC#,} ]"
 	# Ugh, POST for deleting objects :-(
 	curlpostauth $TOKEN "{ $RSRC }" "${AUTH_URL_CBACKUPPOLS}resources/$BACKPOL_ID/deleted_resources" | jq -r '.'
