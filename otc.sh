@@ -1173,6 +1173,16 @@ serverbackupHelp()
 	echo ""
 	echo "otc serverbackuppolicy list            # list server backup policies"
 	echo "otc serverbackuppolicy show NAME|ID    # show server backup policy"
+	echo "otc serverbackuppolicy create [options] NAME # create server backup policy"
+	echo "    --time HH:mm                       # option: UTC time to start backup"
+	echo "    --freq DAILY|WEEKLY                # backup frequency"
+	echo "    --interval N|MO,TU,WE,...          # backup interval"
+	echo "    --retain N                         # no of backups or days to retain"
+	echo "    --retain-type COUNT|DAYS|PERMANENT # retention type"
+	echo "    --enable/disable                   # enable/disable (def: enable)"
+	echo "    --tags key=val,...                 # key-value pairs as tags (optional)"
+	echo "otc serverbackuppolicy delete NAME|ID  # delete server backup policy"
+	echo "otc serverbackuppolicy add NAME|ID HOST [HOST [...]] # add servers to policy"
 }
 
 vpcHelp()
@@ -2140,6 +2150,22 @@ convertBackupPolicyNameToId()
 	if test "$(echo "$BACKPOL_ID" | wc -w)" != "1"; then
 		BACKPOL_ID=$(echo "$BACKPOL_ID" | head -n1)
 		echo "#Warning: Multiple backups found by that name; using $BACKPOL_ID" 1>&2
+	fi
+	export BACKPOL_ID
+	return $RC
+}
+
+convertServerBackupPolicyNameToId()
+{
+	BACKPOL_ID=`curlgetauth $TOKEN "$AUTH_URL_CSBS/policies" | jq '.policies[] | select(.name == "'$1'") | .id' | tr -d '" ,'; return ${PIPESTATUS[0]}`
+	local RC=$?
+	if test -z "$BACKPOL_ID"; then
+		echo "ERROR: No server backup policy found by name $1" 1>&2
+		exit 3
+	fi
+	if test "$(echo "$BACKPOL_ID" | wc -w)" != "1"; then
+		BACKPOL_ID=$(echo "$BACKPOL_ID" | head -n1)
+		echo "#Warning: Multiple server backup policies found by that name; using $BACKPOL_ID" 1>&2
 	fi
 	export BACKPOL_ID
 	return $RC
@@ -6744,6 +6770,159 @@ getServerBackupPolicyDetail()
 	return ${PIPESTATUS[0]}
 }
 
+createServerBackupPolicy()
+{
+	local NAME="$1"; shift
+
+	# Optional pos params (convenience)
+	if test -z "$BKUPTIME" -a -n "$1"; then if test "$1" == "--time"; then shift; fi; BKUPTIME="$1";
+		if test -z "$BKUPFREQ" -a -n "$2"; then if test "$2" == "--freq"; then shift; fi; BKUPFREQ=$2;
+			if test -z "$BKUPRETAIN" -a -n "$3"; then if test "$3" == "--retain"; then shift; fi; BKUPRETAIN=$3; fi
+		fi
+	fi
+
+	if test -z "$BKUPTIME"; then
+		echo "ERROR: missing option '--time'" 1>&2;
+		exit 2
+	fi
+
+	if test -z "$BKUPFREQ"; then
+		echo "ERROR: missing option '--freq'" 1>&2;
+		exit 2
+	fi
+
+	if test -z "$BKUPINTERVAL"; then
+		echo "ERROR: missing option '--interval'" 1>&2;
+		exit 2
+	fi
+
+	if test -z "$OPTENABLE" -a -z "$OPTDISABLE"; then OPTENABLE=1; fi
+	if test -n "$OPTENABLE"; then ENABLED="\"enabled\": true,"; else ENABLED="\"enabled\": false,"; fi
+	if test -n "$TAGS"; then TAGS="\"tags\": [ $(keyval2keyvalue $TAGS) ],"; fi
+
+	# fixed value for backup provider ID according to API documentation
+	PROVIDER_ID="fc4d5750-22e7-4798-8a46-f48f62c4c1da"
+
+	# backup pattern details
+	FREQUENCY="$BKUPFREQ"
+	INTERVAL="$BKUPINTERVAL"
+	BYHOUR=${BKUPTIME:0:2}
+	BYMINUTE=${BKUPTIME:3}
+
+	if [ "$FREQUENCY" = "DAILY" ]; then
+		PATTERN="BEGIN:VEVENT\nRRULE:FREQ=$FREQUENCY;INTERVAL=$INTERVAL;BYHOUR=$BYHOUR;BYMINUTE=$BYMINUTE\nEND:VEVENT"
+	elif [ "$FREQUENCY" = "WEEKLY" ]; then
+		RULES=""
+		for i in `echo $INTERVAL | tr ',' ' '`; do
+			RULES+="RRULE:FREQ=$FREQUENCY;BYDAY=$i;BYHOUR=$BYHOUR;BYMINUTE=$BYMINUTE\n"
+		done
+		PATTERN="BEGIN:VEVENT\n"$RULES"END:VEVENT"
+	else
+		echo "ERROR: invalid value '$BKUPFREQ' for option '--freq'" 1>&2;
+		exit 2
+	fi
+
+	PERMANENT="\"permanent\": false"
+	if [ "$BKUPRETAINTYPE" = "COUNT" ]; then
+		MAX_BACKUPS="\"max_backups\": $BKUPRETAIN,"
+	elif [ "$BKUPRETAINTYPE" = "DAYS" ]; then
+		RETENTION_DURATION_DAYS="\"retention_duration_days\": $BKUPRETAIN,"
+	elif [ "$BKUPRETAINTYPE" = "PERMANENT" ]; then
+		PERMANENT="\"permanent\": true"
+	else
+		echo "ERROR: invalid value '$BKUPRETAINTYPE' for option '--retain-type'" 1>&2;
+		exit 2
+	fi
+
+	if [ "$BKUPRETAINTYPE" != "$PERMANENT" -a "$BKUPRETAIN" = "" ]; then
+		echo "ERROR: missing value for option '--retain'" 1>&2;
+		exit 2
+	fi
+
+	REQ_CREATE_POLICY="
+	{
+		\"policy\": {
+			\"name\": \"$NAME\",
+			\"provider_id\": \"$PROVIDER_ID\",
+			\"parameters\": {
+				\"common\" : { }
+			},
+			\"scheduled_operations\": [ {
+				$ENABLED
+				\"operation_type\": \"backup\",
+				\"operation_definition\": {
+					$MAX_BACKUPS
+					$RETENTION_DURATION_DAYS
+					$PERMANENT
+				},
+				\"trigger\": {
+					\"properties\": {
+						\"pattern\": \"$PATTERN\"
+					}
+				}
+			} ],
+			$TAGS
+			\"resources\": [ ]
+		}
+	}"
+
+	curlpostauth $TOKEN "$REQ_CREATE_POLICY" "$AUTH_URL_CSBS/policies" | jq -r '.'
+
+	return ${PIPESTATUS[0]}
+}
+
+deleteServerBackupPolicy()
+{
+	BACKPOL_ID="$1"; shift
+	if ! is_uuid $BACKPOL_ID; then convertServerBackupPolicyNameToId $BACKPOL_ID; fi
+
+	curldeleteauth $TOKEN "$AUTH_URL_CSBS/policies/$BACKPOL_ID"
+}
+
+addServersToServerBackupPolicy()
+{
+	BACKPOL_ID="$1"; shift
+	if ! is_uuid $BACKPOL_ID; then convertServerBackupPolicyNameToId $BACKPOL_ID; fi
+
+	# fixed value for VM resource type according to API documentation
+	RESOURCE_TYPE="OS::Nova::Server"
+
+	local RESOURCES=""
+	for host in "$@"; do
+		id=$host
+		name=$host
+		if ! is_uuid "$id"; then
+			id=`curlgetauth $TOKEN "$AUTH_URL_ECS" | jq -r '.servers[] | select(.name == "'$name'") | .id' | tr -d '" ,'`;
+		    else
+			name=`curlgetauth $TOKEN "$AUTH_URL_ECS" | jq -r '.servers[] | select(.id == "'$id'") | .name' | tr -d '" ,'`;
+		fi
+
+		if ! is_uuid "$id"; then echo "ERROR: No such server '$host'" 1>&2; exit 2; fi
+		if is_uuid "$name"; then echo "ERROR: No such server '$host'" 1>&2; exit 2; fi
+
+		RESOURCES="$RESOURCES,
+				{
+					\"id\": \"$id\",
+					\"type\": \"$RESOURCE_TYPE\",
+					\"name\": \"$name\"
+				}"
+	done
+
+	if test -z "$RESOURCES"; then echo "ERROR: Missing list of server IDs to be added to server backup policy" 1>&2; exit 2; fi
+
+	REQ_ADD_SERVERS="
+	{
+		\"policy\": {
+			\"resources\": [
+				${RESOURCES#,}
+			]
+		}
+	}"
+
+	curlputauth $TOKEN "$REQ_ADD_SERVERS" "$AUTH_URL_CSBS/policies/$BACKPOL_ID" | jq -r '.'
+	return ${PIPESTATUS[0]}
+}
+
 listVPN()
 {
 	curlgetauth $TOKEN "$NEUTRON_URL/v2.0/vpn/ipsec-site-connections" | jq '.ipsec_site_connections[] | .id+"   "+.name+"   "+.status+"   "+.auth_mode+"   "+.route_mode+"   "+.peer_address+"   "+.ikepolicy_id+"   "+.ipsecpolicy_id' | tr -d '"'
@@ -7981,8 +8160,12 @@ if [ "${SUBCOM:0:6}" == "create" -o "${SUBCOM:0:5}" == "apply" -o "${SUBCOM:0:9}
 				BKUPTIME="$2"; shift;;
 			--freq)
 				BKUPFREQ=$2; shift;;
+			--interval)
+				BKUPINTERVAL=$2; shift;;
 			--retain)
 				BKUPRETAIN=$2; shift;;
+			--retain-type)
+				BKUPRETAINTYPE=$2; shift;;
 			--retain1st)
 				BKUPRETFIRST="$2"; shift;;
 			--enable)
@@ -9036,14 +9219,24 @@ elif [ "$MAINCOM" == "cache"  -a "$SUBCOM" == "azs" ]; then
 	listCacheAZs
 elif [ "$MAINCOM" == "dws"  -a "$SUBCOM" == "list" ]; then
 	listDWS
+elif [ "$MAINCOM" == "serverbackup"  -a "$SUBCOM" == "help" ]; then
+	serverbackupHelp
 elif [ "$MAINCOM" == "serverbackup"  -a "$SUBCOM" == "list" ]; then
 	getServerBackupList "$@"
 elif [ "$MAINCOM" == "serverbackup"  -a "$SUBCOM" == "show" ]; then
 	getServerBackupDetail "$1"
+elif [ "$MAINCOM" == "serverbackuppolicy"  -a "$SUBCOM" == "help" ]; then
+	serverbackupHelp
 elif [ "$MAINCOM" == "serverbackuppolicy"  -a "$SUBCOM" == "list" ]; then
 	getServerBackupPolicyList
 elif [ "$MAINCOM" == "serverbackuppolicy"  -a "$SUBCOM" == "show" ]; then
 	getServerBackupPolicyDetail "$1"
+elif [ "$MAINCOM" == "serverbackuppolicy"  -a "$SUBCOM" == "create" ]; then
+	createServerBackupPolicy "$@"
+elif [ "$MAINCOM" == "serverbackuppolicy"  -a "$SUBCOM" == "delete" ]; then
+	deleteServerBackupPolicy "$1"
+elif [ "$MAINCOM" == "serverbackuppolicy"  -a "$SUBCOM" == "add" ]; then
+	addServersToServerBackupPolicy "$@"
 elif [ "$MAINCOM" == "migration"  -a "$SUBCOM" == "list" ]; then
 	listMigrations
 elif [ "$MAINCOM" == "kms"  -a "$SUBCOM" == "list" ]; then
