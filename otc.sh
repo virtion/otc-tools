@@ -9219,23 +9219,23 @@ elif [ "$MAINCOM" == "cache"  -a "$SUBCOM" == "azs" ]; then
 	listCacheAZs
 elif [ "$MAINCOM" == "dws"  -a "$SUBCOM" == "list" ]; then
 	listDWS
-elif [ "$MAINCOM" == "serverbackup"  -a "$SUBCOM" == "help" ]; then
+elif [ "$MAINCOM" == "serverbackup" -a "$SUBCOM" == "help" ]; then
 	serverbackupHelp
-elif [ "$MAINCOM" == "serverbackup"  -a "$SUBCOM" == "list" ]; then
+elif [ "$MAINCOM" == "serverbackup" -a "$SUBCOM" == "list" ]; then
 	getServerBackupList "$@"
-elif [ "$MAINCOM" == "serverbackup"  -a "$SUBCOM" == "show" ]; then
+elif [ "$MAINCOM" == "serverbackup" -a "$SUBCOM" == "show" ]; then
 	getServerBackupDetail "$1"
-elif [ "$MAINCOM" == "serverbackuppolicy"  -a "$SUBCOM" == "help" ]; then
+elif [ "$MAINCOM" == "serverbackuppolicy" -a "$SUBCOM" == "help" ]; then
 	serverbackupHelp
-elif [ "$MAINCOM" == "serverbackuppolicy"  -a "$SUBCOM" == "list" ]; then
+elif [ "$MAINCOM" == "serverbackuppolicy" -a "$SUBCOM" == "list" ]; then
 	getServerBackupPolicyList
-elif [ "$MAINCOM" == "serverbackuppolicy"  -a "$SUBCOM" == "show" ]; then
+elif [ "$MAINCOM" == "serverbackuppolicy" -a "$SUBCOM" == "show" ]; then
 	getServerBackupPolicyDetail "$1"
-elif [ "$MAINCOM" == "serverbackuppolicy"  -a "$SUBCOM" == "create" ]; then
+elif [ "$MAINCOM" == "serverbackuppolicy" -a "$SUBCOM" == "create" ]; then
 	createServerBackupPolicy "$@"
-elif [ "$MAINCOM" == "serverbackuppolicy"  -a "$SUBCOM" == "delete" ]; then
+elif [ "$MAINCOM" == "serverbackuppolicy" -a "$SUBCOM" == "delete" ]; then
 	deleteServerBackupPolicy "$1"
-elif [ "$MAINCOM" == "serverbackuppolicy"  -a "$SUBCOM" == "add" ]; then
+elif [ "$MAINCOM" == "serverbackuppolicy" -a "$SUBCOM" == "add" ]; then
 	addServersToServerBackupPolicy "$@"
 elif [ "$MAINCOM" == "migration"  -a "$SUBCOM" == "list" ]; then
 	listMigrations
