@@ -1182,7 +1182,8 @@ serverbackupHelp()
 	echo "    --enable/disable                   # enable/disable (def: enable)"
 	echo "    --tags key=val,...                 # key-value pairs as tags (optional)"
 	echo "otc serverbackuppolicy delete NAME|ID  # delete server backup policy"
-	echo "otc serverbackuppolicy add NAME|ID HOST [HOST [...]] # add servers to policy"
+	echo "otc serverbackuppolicy add NAME|ID HOST [HOST [...]]    # add servers to policy"
+	echo "otc serverbackuppolicy remove NAME|ID HOST [HOST [...]] # remove servers from policy"
 }
 
 vpcHelp()
@@ -6879,7 +6880,7 @@ deleteServerBackupPolicy()
 	curldeleteauth $TOKEN "$AUTH_URL_CSBS/policies/$BACKPOL_ID"
 }
 
-addServersToServerBackupPolicy()
+updateServersInServerBackupPolicy()
 {
 	BACKPOL_ID="$1"; shift
 	if ! is_uuid $BACKPOL_ID; then convertServerBackupPolicyNameToId $BACKPOL_ID; fi
@@ -6888,17 +6889,18 @@ addServersToServerBackupPolicy()
 	RESOURCE_TYPE="OS::Nova::Server"
 
 	local RESOURCES=""
-	for host in "$@"; do
+	for host in $@; do
 		id=$host
 		name=$host
+
 		if ! is_uuid "$id"; then
 			id=`curlgetauth $TOKEN "$AUTH_URL_ECS" | jq -r '.servers[] | select(.name == "'$name'") | .id' | tr -d '" ,'`;
 		    else
 			name=`curlgetauth $TOKEN "$AUTH_URL_ECS" | jq -r '.servers[] | select(.id == "'$id'") | .name' | tr -d '" ,'`;
 		fi
 
-		if ! is_uuid "$id"; then echo "ERROR: No such server '$host'" 1>&2; exit 2; fi
-		if is_uuid "$name"; then echo "ERROR: No such server '$host'" 1>&2; exit 2; fi
+		if test -z "$id";   then echo "ERROR: No such server '$host'" 1>&2; exit 2; fi
+		if test -z "$name"; then echo "ERROR: No such server '$host'" 1>&2; exit 2; fi
 
 		RESOURCES="$RESOURCES,
 				{
@@ -6907,8 +6909,6 @@ addServersToServerBackupPolicy()
 					\"name\": \"$name\"
 				}"
 	done
-
-	if test -z "$RESOURCES"; then echo "ERROR: Missing list of server IDs to be added to server backup policy" 1>&2; exit 2; fi
 
 	REQ_ADD_SERVERS="
 	{
@@ -6920,6 +6920,90 @@ addServersToServerBackupPolicy()
 	}"
 
 	curlputauth $TOKEN "$REQ_ADD_SERVERS" "$AUTH_URL_CSBS/policies/$BACKPOL_ID" | jq -r '.'
+
+	return ${PIPESTATUS[0]}
+}
+
+addServersToServerBackupPolicy()
+{
+	BACKPOL_ID="$1"; shift
+	if ! is_uuid $BACKPOL_ID; then convertServerBackupPolicyNameToId $BACKPOL_ID; fi
+
+	if [ "$1" = "" ]; then
+		echo "ERROR: Missing list of server IDs to be added to server backup policy" 1>&2
+		exit 2
+	fi
+
+	SERVERS_OLD=$(curlgetauth $TOKEN "$AUTH_URL_CSBS/policies/$BACKPOL_ID" | jq ".policy.resources[] | .name" | tr -d '"' | tr '\n' ' ')
+
+	SERVERS_NEW="$SERVERS_OLD $@"
+
+	updateServersInServerBackupPolicy "$BACKPOL_ID" "$SERVERS_NEW"
+
+	return ${PIPESTATUS[0]}
+}
+
+removeServersFromServerBackupPolicy()
+{
+	BACKPOL_ID="$1"; shift
+	if ! is_uuid $BACKPOL_ID; then convertServerBackupPolicyNameToId $BACKPOL_ID; fi
+
+	if [ "$1" = "" ]; then
+		echo "ERROR: Missing list of server IDs to be removed from server backup policy" 1>&2
+		exit 2
+	fi
+
+	SERVERS_OLD=$(curlgetauth $TOKEN "$AUTH_URL_CSBS/policies/$BACKPOL_ID" | jq ".policy.resources[] | .name" | tr -d '"' | tr '\n' ' ')
+
+	# check hosts to be removed
+	SERVERS_REMOVE=""
+	for host in $@; do
+		id=$host
+		name=$host
+
+		if ! is_uuid "$id"; then
+			id=`curlgetauth $TOKEN "$AUTH_URL_ECS" | jq -r '.servers[] | select(.name == "'$name'") | .id' | tr -d '" ,'`;
+		    else
+			name=`curlgetauth $TOKEN "$AUTH_URL_ECS" | jq -r '.servers[] | select(.id == "'$id'") | .name' | tr -d '" ,'`;
+		fi
+
+		if test -z "$id";   then echo "ERROR: No such server '$host'" 1>&2; exit 2; fi
+		if test -z "$name"; then echo "ERROR: No such server '$host'" 1>&2; exit 2; fi
+
+		SERVERS_REMOVE+=" $name"
+	done
+
+	# warn if hosts to be removed do not exist in backup policy
+	for host_remove in $SERVERS_REMOVE; do
+		FOUND="0"
+		for host_old in $SERVERS_OLD; do
+			if [ "$host_old" = "$host_remove" ]; then
+				FOUND="1"
+			fi
+		done
+
+		if [ "$FOUND" = "0" ]; then
+			echo "WARN: Host '$host_remove' not found in server backup policy" 1>&2
+		fi
+	done
+
+	# create new host list without hosts to be removed
+	SERVERS_NEW=""
+	for host_old in $SERVERS_OLD; do
+		FOUND="0"
+		for host_remove in $SERVERS_REMOVE; do
+			if [ "$host_old" = "$host_remove" ]; then
+				FOUND="1"
+			fi
+		done
+
+		if [ "$FOUND" = "0" ]; then
+			SERVERS_NEW+=" $host_old"
+		fi
+	done
+
+	updateServersInServerBackupPolicy "$BACKPOL_ID" "$SERVERS_NEW"
+
 	return ${PIPESTATUS[0]}
 }
 
@@ -9237,6 +9321,8 @@ elif [ "$MAINCOM" == "serverbackuppolicy" -a "$SUBCOM" == "delete" ]; then
 	deleteServerBackupPolicy "$1"
 elif [ "$MAINCOM" == "serverbackuppolicy" -a "$SUBCOM" == "add" ]; then
 	addServersToServerBackupPolicy "$@"
+elif [ "$MAINCOM" == "serverbackuppolicy" -a "$SUBCOM" == "remove" ]; then
+	removeServersFromServerBackupPolicy "$@"
 elif [ "$MAINCOM" == "migration"  -a "$SUBCOM" == "list" ]; then
 	listMigrations
 elif [ "$MAINCOM" == "kms"  -a "$SUBCOM" == "list" ]; then
