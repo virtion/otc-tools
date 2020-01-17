@@ -6967,8 +6967,9 @@ removeServersFromServerBackupPolicy()
 			name=`curlgetauth $TOKEN "$AUTH_URL_ECS" | jq -r '.servers[] | select(.id == "'$id'") | .name' | tr -d '" ,'`;
 		fi
 
-		if test -z "$id";   then echo "ERROR: No such server '$host'" 1>&2; exit 2; fi
-		if test -z "$name"; then echo "ERROR: No such server '$host'" 1>&2; exit 2; fi
+		# allow removing hosts from policy that do not exist anymore
+		if test -z "$id";   then echo "WARN: No such server '$host'" 1>&2; fi
+		if test -z "$name"; then echo "WARN: No such server '$host'" 1>&2; fi
 
 		SERVERS_REMOVE+=" $name"
 	done
