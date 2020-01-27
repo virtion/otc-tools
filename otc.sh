@@ -1393,11 +1393,21 @@ elbHelp()
 	echo "otc elb updatecert ID/NM [NEWNM]# Update cert name/desc (same opts as above)"
 	echo "otc elb showcert ID/NM          # SSL certificate details"
 	echo "otc elb deletecert ID/NM        # SSL certificate deletion"
+}
 
-	echo "--- Unified Load Balancer (ULB aka LBaaSv2) ---"
+ulbHelp()
+{
+	echo "--- Unified (Enhanced) Load Balancer (ULB aka LBaaSv2) ---"
 	echo "otc ulb list            # list all unified load balancers/ELBv2"
 	echo "otc ulb show <ulb>      # show details of <ulb>"
 	echo "otc ulb details <ulb>   # show more details of <ulb>"
+	#
+	echo "otc ulb listcert                # Show certs for SSL termination"
+	echo "otc ulb createcert [opt] CERT PRIV [NAME [DOM]]   # SSL certificate creation (PEM files)"
+	echo "    --name NAME --description DESC --domain DOM   # domain needed for SNI"
+	echo "otc ulb updatecert ID/NM [NEWNM]# Update cert name/desc (same opts as above)"
+	echo "otc ulb showcert ID/NM          # SSL certificate details"
+	echo "otc ulb deletecert ID/NM        # SSL certificate deletion"
 }
 
 asHelp()
@@ -1822,6 +1832,8 @@ printHelp()
 	imageHelp
 	echo
 	elbHelp
+	echo
+	ulbHelp
 	echo
 	asHelp
 	echo
@@ -4307,6 +4319,84 @@ getULBFullDetail()
 	if ! is_uuid "$ID"; then ID=`curlgetauth $TOKEN "$NEUTRON_URL/v2.0/lbaas/loadbalancers?name=$ID" | jq '.loadbalancers[].id' | tr -d '"'`; fi
 	#setlimit; setapilimit 880 40 loadbalancers
 	curlgetauth $TOKEN "$NEUTRON_URL/v2.0/lbaas/loadbalancers/$ID/statuses" | jq -r '.'
+	return ${PIPESTATUS[0]}
+}
+
+preparePEM()
+{
+	cat "$1"						\
+		| sed -e "s/^\(-----.*-----\)$/\\\n\1\\\n/"	\
+		| tr -d '\n'					\
+		| sed -e "s/^\\\n//"				\
+		| sed -e "s/\\\n$//"				\
+		| sed -e "s/\\\n\\\n/\\\n/"
+}
+
+# SSL termination
+# $1 -> cert content (PEM)
+# $2 -> private key (PEM)
+createULBCert()
+{
+	local DESC NM
+	local CERT="$1"; shift
+	local PRIV="$1"; shift
+	if test -z "$PRIV"; then echo "ELB Cert creation: Pass CERT.pem and PrivKey.pem" 1>&2; exit 2; fi
+	if test ! -r "$CERT"; then echo "ELB Cert file $CERT must be readable" 1>&2; exit 2; fi
+	CERT=$(preparePEM "$CERT")
+	if test ! -r "$PRIV"; then echo "ELB PrivKey file $PRIV must be readable" 1>&2; exit 2; fi
+	PRIV=$(preparePEM "$PRIV")
+	if test -z "$NAME" -a -n "$1"; then NAME="$1"; if test "$NAME" == "--name"; then shift; NAME="$1"; fi; fi
+	if test -z "$DOMAIN" -a -n "$2"; then DOMAIN="$2"; if test "$DOMAIN" == "--domain"; then shift; DOMAIN="$2"; fi; fi
+	if test -n "$DESCRIPTION"; then DESC=", \"description\": \"$DESCRIPTION\""; fi
+	if test -n "$DOMAIN"; then DESC="$DESC, \"domain\": \"$DOMAIN\""; fi
+	if test -n "$KEYNAME" -a -z "$NAME"; then NAME="$KEYNAME"; fi
+	if test -n "$NAME"; then NM=", \"name\": \"$NAME\""; fi
+	curlpostauth $TOKEN "{ \"certificate\": \"$CERT\", \"private_key\": \"$PRIV\" $NM $DESC }"  "$NEUTRON_URL/v2.0/lbaas/certificates" | sed 's/\(-----BEGIN[A-Z ]*PRIVATE KEY-----\)[^-]*/\1\\nMIIsecretsecret/g' | jq -r '.'
+	return ${PIPESTATUS[0]}
+}
+
+listULBCert()
+{
+	curlgetauth $TOKEN "$NEUTRON_URL/v2.0/lbaas/certificates" | jq '.certificates[] | .id+"   "+.name+"   "+.domain+"   "+.description' | tr -d '"'
+	return ${PIPESTATUS[0]}
+}
+
+showULBCert()
+{
+	local FILTER
+	if is_id $1; then FILTER="select(.id == \"$1\")"; else FILTER="select(.name == \"$1\")"; fi
+	curlgetauth $TOKEN "$NEUTRON_URL/v2.0/lbaas/certificates" | jq ".certificates[] | $FILTER"
+	return ${PIPESTATUS[0]}
+}
+
+deleteULBCert()
+{
+	local ID="$1"; shift
+	if ! is_id "$ID"; then ID=`curlgetauth $TOKEN "$NEUTRON_URL/v2.0/lbaas/certificates" | jq ".certificates[] | select(.name == \"$ID\") | .id" | tr -d '"'`; fi
+	curldeleteauth $TOKEN "$NEUTRON_URL/v2.0/lbaas/certificates/$ID"
+}
+
+modifyULBCert()
+{
+	local CERT="$1"; shift
+	local PRIV="$1"; shift
+	if test -z "$PRIV"; then echo "ELB Cert creation: Pass CERT.pem and PrivKey.pem" 1>&2; exit 2; fi
+	if test ! -r "$CERT"; then echo "ELB Cert file $CERT must be readable" 1>&2; exit 2; fi
+	CERT=$(preparePEM "$CERT")
+	if test ! -r "$PRIV"; then echo "ELB PrivKey file $PRIV must be readable" 1>&2; exit 2; fi
+	PRIV=$(preparePEM "$PRIV")
+
+	local ID="$1"; shift
+	if ! is_id "$ID"; then ID=`curlgetauth $TOKEN "$NEUTRON_URL/v2.0/lbaas/certificates" | jq ".certificates[] | select(.name == \"$ID\") | .id" | tr -d '"'`; fi
+	if test -z "$ID" -o "$ID" = "null"; then echo "ERROR: No such ELB cert" 1>&2; exit 2; fi
+	if test -z "$NAME" -a -n "$1"; then NAME="$1"; if test "$NAME" == "--name"; then shift; NAME="$1"; fi; fi
+	if test -z "$DOMAIN" -a -n "$2"; then DOMAIN="$2"; if test "$DOMAIN" == "--domain"; then shift; DOMAIN="$2"; fi; fi
+	local DESC
+	if test -n "$DESCRIPTION"; then DESC="\"description\": \"$DESCRIPTION\""; fi
+	if test -n "$DOMAIN"; then DESC="$DESC, \"domain\": \"$DOMAIN\""; fi
+	if test -n "$NAME"; then DESC="$DESC, \"name\": \"$NAME\""; fi
+	DESC="${DESC#,}"
+	curlputauth $TOKEN "{ \"certificate\": \"$CERT\", \"private_key\": \"$PRIV\" $NM $DESC }" "$NEUTRON_URL/v2.0/lbaas/certificates/$ID" | sed 's/\(-----BEGIN[A-Z ]*PRIVATE KEY-----\)[^-]*/\1\\nMIIsecretsecret/g' | jq -r '.'
 	return ${PIPESTATUS[0]}
 }
 
@@ -9020,8 +9110,7 @@ elif [ "$MAINCOM" == "snapshot" -a "$SUBCOM" == "show" ]; then
 elif [ "$MAINCOM" == "snapshot" -a "$SUBCOM" == "delete" ]; then
 	deleteSnapshot "$1"
 
-elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "help" ] ||
-     [ "$MAINCOM" == "ulb" -a "$SUBCOM" == "help" ]; then
+elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "help" ]; then
 	elbHelp
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "list" ]; then
 	getELBList
@@ -9072,12 +9161,25 @@ elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "delcert" ] ||
      [ "$MAINCOM" == "elb" -a "$SUBCOM" == "deletecert" ]; then
 	deleteELBCert "$@"
 
+elif [ "$MAINCOM" == "ulb" -a "$SUBCOM" == "help" ]; then
+	ulbHelp
 elif [ "$MAINCOM" == "ulb" -a "$SUBCOM" == "list" ]; then
 	getULBList
 elif [ "$MAINCOM" == "ulb" -a "$SUBCOM" == "show" ]; then
 	getULBDetail "$@"
 elif [ "$MAINCOM" == "ulb" -a "$SUBCOM" == "details" ]; then
 	getULBFullDetail "$@"
+elif [ "$MAINCOM" == "ulb" -a "${SUBCOM:0:8}" == "listcert" ]; then
+	listULBCert
+elif [ "$MAINCOM" == "ulb" -a "$SUBCOM" == "showcert" ]; then
+	showULBCert "$@"
+elif [ "$MAINCOM" == "ulb" -a "$SUBCOM" == "createcert" ]; then
+	createULBCert "$@"
+elif [ "$MAINCOM" == "ulb" -a "$SUBCOM" == "updatecert" ]; then
+	modifyULBCert "$@"
+elif [ "$MAINCOM" == "ulb" -a "$SUBCOM" == "delcert" ] ||
+     [ "$MAINCOM" == "ulb" -a "$SUBCOM" == "deletecert" ]; then
+	deleteULBCert "$@"
 
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "help" ]; then
 	rdsHelp
