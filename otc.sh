@@ -7713,7 +7713,7 @@ listWorkspaceDesktops()
 	RESULT=`curlgetauth $TOKEN "$URL"`
 
 	if [[ "$RESULT" =~ "error_code" ]]; then
-		echo "$RESULT" | jq -r .
+		echo "$RESULT" | jq -r . 1>&2
 	else
 		echo "$RESULT" | jq -r '.desktops[] | .desktop_id + "   " + .computer_name + "   " + .ip_address + "   " + .desktop_type + "   " + .user_name + "   " + .user_group + "   " + .created' | sed -r '/^\s*$/d'
 	fi
@@ -7743,7 +7743,7 @@ queryWorkspaceDesktop()
 	RESULT=`curlgetauth $TOKEN "$URL"`
 
 	if [[ "$RESULT" =~ "error_code" ]]; then
-		echo "$RESULT" | jq -r .
+		echo "$RESULT" | jq -r . 1>&2
 	else
 		echo "$RESULT" | jq -r $JQNAME' | .desktop_id + "   " + .computer_name + "   " + .status + "   " + .login_status + "   " + .user_name + "   " + .user_group + "   " + .availability_zone + "   " + .product_id + "   \"" + .metadata.desktop_os_version + "\"" + "   " + .created' | sed -r '/^\s*$/d'
 	fi
@@ -7997,7 +7997,7 @@ listWorkspaceDesktopUsers()
 	RESULT=`curlgetauth $TOKEN "$URL"`
 
 	if [[ "$RESULT" =~ "error_code" ]]; then
-		echo "$RESULT" | jq -r .
+		echo "$RESULT" | jq -r . 1>&2
 	else
 		echo "$RESULT" | jq -r '.users[] | .user_name + "   " + .user_email + "   " + .ad_domains.domain_name + "   " + .ad_domains.domain_type' | sed -r '/^\s*$/d'
 	fi
