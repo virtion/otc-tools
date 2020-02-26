@@ -7710,7 +7710,13 @@ listWorkspaceDesktops()
 {
 	URL="$AUTH_URL_WORKSPACE_DESKTOPS"
 
-	curlgetauth $TOKEN "$URL" | jq -r '.desktops[] | .desktop_id + "   " + .computer_name + "   " + .ip_address + "   " + .desktop_type + "   " + .user_name + "   " + .user_group + "   " + .created' | sed -r '/^\s*$/d'
+	RESULT=`curlgetauth $TOKEN "$URL"`
+
+	if [[ "$RESULT" =~ "error_code" ]]; then
+		echo "$RESULT" | jq -r .
+	else
+		echo "$RESULT" | jq -r '.desktops[] | .desktop_id + "   " + .computer_name + "   " + .ip_address + "   " + .desktop_type + "   " + .user_name + "   " + .user_group + "   " + .created' | sed -r '/^\s*$/d'
+	fi
 
 	return ${PIPESTATUS[0]}
 }
@@ -7734,7 +7740,13 @@ queryWorkspaceDesktop()
 
 	URL="$AUTH_URL_WORKSPACE_DESKTOPS/$DESKTOP_ID"
 
-	curlgetauth $TOKEN "$URL" | jq -r $JQNAME' | .desktop_id + "   " + .computer_name + "   " + .status + "   " + .login_status + "   " + .user_name + "   " + .user_group + "   " + .availability_zone + "   " + .product_id + "   \"" + .metadata.desktop_os_version + "\"" + "   " + .created' | sed -r '/^\s*$/d'
+	RESULT=`curlgetauth $TOKEN "$URL"`
+
+	if [[ "$RESULT" =~ "error_code" ]]; then
+		echo "$RESULT" | jq -r .
+	else
+		echo "$RESULT" | jq -r $JQNAME' | .desktop_id + "   " + .computer_name + "   " + .status + "   " + .login_status + "   " + .user_name + "   " + .user_group + "   " + .availability_zone + "   " + .product_id + "   \"" + .metadata.desktop_os_version + "\"" + "   " + .created' | sed -r '/^\s*$/d'
+	fi
 
 	return ${PIPESTATUS[0]}
 }
