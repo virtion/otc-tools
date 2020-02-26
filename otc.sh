@@ -7994,7 +7994,13 @@ listWorkspaceDesktopUsers()
 {
 	URL="$AUTH_URL_WORKSPACE_DESKTOP_USERS"
 
-	curlgetauth $TOKEN "$URL" | jq -r '.users[] | .user_name + "   " + .user_email + "   " + .ad_domains.domain_name + "   " + .ad_domains.domain_type' | sed -r '/^\s*$/d'
+	RESULT=`curlgetauth $TOKEN "$URL"`
+
+	if [[ "$RESULT" =~ "error_code" ]]; then
+		echo "$RESULT" | jq -r .
+	else
+		echo "$RESULT" | jq -r '.users[] | .user_name + "   " + .user_email + "   " + .ad_domains.domain_name + "   " + .ad_domains.domain_type' | sed -r '/^\s*$/d'
+	fi
 
 	return ${PIPESTATUS[0]}
 }
